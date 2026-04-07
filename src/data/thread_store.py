@@ -40,17 +40,21 @@ class ThreadStore:
 
     async def save_thread(self, thread: Thread):
         db = await self._get_db()
-        await db.execute(
-            "INSERT OR REPLACE INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (thread.id, thread.title, thread.created_at.isoformat(), thread.updated_at.isoformat())
-        )
-        await db.execute("DELETE FROM messages WHERE thread_id = ?", (thread.id,))
-        for msg in thread.messages:
+        try:
             await db.execute(
-                "INSERT INTO messages (id, thread_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)",
-                (msg.id, thread.id, msg.role.value, msg.content, msg.timestamp.isoformat())
+                "INSERT OR REPLACE INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                (thread.id, thread.title, thread.created_at.isoformat(), thread.updated_at.isoformat())
             )
-        await db.commit()
+            await db.execute("DELETE FROM messages WHERE thread_id = ?", (thread.id,))
+            for msg in thread.messages:
+                await db.execute(
+                    "INSERT INTO messages (id, thread_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)",
+                    (msg.id, thread.id, msg.role.value, msg.content, msg.timestamp.isoformat())
+                )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
     async def get_thread(self, thread_id: str) -> Optional[Thread]:
         db = await self._get_db()
@@ -62,28 +66,36 @@ class ThreadStore:
         if row is None:
             return None
 
-        thread = Thread(
-            id=row[0],
-            title=row[1],
-            created_at=datetime.fromisoformat(row[2]),
-            updated_at=datetime.fromisoformat(row[3])
-        )
+        try:
+            thread = Thread(
+                id=row[0],
+                title=row[1],
+                created_at=datetime.fromisoformat(row[2]),
+                updated_at=datetime.fromisoformat(row[3])
+            )
+        except (ValueError, TypeError):
+            return None
 
         cursor = await db.execute(
             "SELECT id, role, content, timestamp FROM messages WHERE thread_id = ? ORDER BY timestamp",
             (thread_id,)
         )
         async for row in cursor:
-            msg = Message(
-                id=row[0],
-                role=Role(row[1]),
-                content=row[2],
-                timestamp=datetime.fromisoformat(row[3])
-            )
-            thread.messages.append(msg)
+            try:
+                msg = Message(
+                    id=row[0],
+                    role=Role(row[1]),
+                    content=row[2],
+                    timestamp=datetime.fromisoformat(row[3])
+                )
+                thread.messages.append(msg)
+            except (ValueError, TypeError):
+                # Skip malformed messages
+                continue
 
         return thread
 
     async def close(self):
         if self._db:
             await self._db.close()
+            self._db = None
