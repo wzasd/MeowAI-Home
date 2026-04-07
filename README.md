@@ -5,7 +5,7 @@
 ## 快速开始
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
 meowai chat
 ```
 
