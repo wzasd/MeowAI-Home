@@ -11,3 +11,6 @@ build/
 .venv/
 data/*.db
 data/*.db-journal
+
+# macOS
+.DS_Store
