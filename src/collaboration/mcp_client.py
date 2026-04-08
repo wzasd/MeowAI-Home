@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
+import inspect
 
 
 @dataclass
@@ -54,8 +55,12 @@ class MCPClient:
 
         tool = self._tools[tool_name]
         try:
+            # 检查 handler 是否接受 thread 参数
+            sig = inspect.signature(tool.handler)
+            accepts_thread = "thread" in sig.parameters
+
             # 注入 thread 到参数（如果需要）
-            if self.thread and "thread" not in params:
+            if self.thread and accepts_thread and "thread" not in params:
                 result = await tool.handler(thread=self.thread, **params)
             else:
                 result = await tool.handler(**params)
