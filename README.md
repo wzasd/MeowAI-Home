@@ -12,3 +12,4 @@ meowai chat
 ## 开发日记
 
 - [Day 1: 让阿橘第一次开口说话](docs/diary/001-orange-speaks.md)
+- [Day 2: 三猫协作的架构实现](docs/diary/002-three-cats-collaboration.md)
