@@ -1,7 +1,10 @@
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
+import asyncio
+
 from src.thread.models import Thread
-from src.thread.persistence import ThreadPersistence
+from src.thread.stores.sqlite_store import SQLiteStore
+from src.thread.stores.migration import check_needs_migration, migrate_json_to_sqlite
 
 
 class ThreadManager:
@@ -15,92 +18,102 @@ class ThreadManager:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, db_path=None, skip_init=False):
+        """
+        Args:
+            db_path: 可选的数据库路径（用于测试）
+            skip_init: 如果为 True，跳过数据库初始化（用于测试，此时应在异步上下文中手动初始化）
+        """
         if ThreadManager._initialized:
             return
 
-        self._threads: Dict[str, Thread] = {}
+        self._store = SQLiteStore(db_path)
         self._current_thread_id: Optional[str] = None
-        self._persistence = ThreadPersistence()
+        self._needs_async_init = False
 
-        # 从磁盘加载
-        self._load()
+        # 初始化数据库
+        if not skip_init:
+            try:
+                loop = asyncio.get_running_loop()
+                # 如果在运行中的事件循环中（如测试），需要外部初始化
+                self._needs_async_init = True
+            except RuntimeError:
+                # 没有运行的事件循环，可以安全使用 asyncio.run
+                asyncio.run(self._init_db())
 
         ThreadManager._initialized = True
 
-    def _load(self):
-        """从磁盘加载 threads"""
-        self._threads, self._current_thread_id = self._persistence.load()
+    async def async_init(self):
+        """异步初始化（用于测试或在异步上下文中）"""
+        await self._init_db()
+        self._needs_async_init = False
 
-    def _save(self):
-        """保存到磁盘"""
-        self._persistence.save(self._threads, self._current_thread_id)
+    async def _init_db(self):
+        """初始化数据库"""
+        # 检查是否需要迁移
+        if check_needs_migration():
+            print("🔄 正在从旧格式迁移数据...")
+            count = await migrate_json_to_sqlite()
+            print(f"✅ 已迁移 {count} 个 threads")
 
-    def create(self, name: str, current_cat_id: str = "orange") -> Thread:
+        await self._store.initialize()
+
+    async def create(self, name: str, current_cat_id: str = "orange") -> Thread:
         """创建新 thread"""
         thread = Thread.create(name, current_cat_id)
-        self._threads[thread.id] = thread
-        self._save()
+        await self._store.save_thread(thread)
         return thread
 
-    def get(self, thread_id: str) -> Optional[Thread]:
+    async def get(self, thread_id: str) -> Optional[Thread]:
         """获取指定 thread"""
-        return self._threads.get(thread_id)
+        return await self._store.get_thread(thread_id)
 
-    def list(self, include_archived: bool = False) -> List[Thread]:
+    async def list(self, include_archived: bool = False) -> List[Thread]:
         """列出所有 threads"""
-        threads = list(self._threads.values())
-        if not include_archived:
-            threads = [t for t in threads if not t.is_archived]
-        # 按更新时间倒序
-        return sorted(threads, key=lambda t: t.updated_at, reverse=True)
+        return await self._store.list_threads(include_archived)
 
     def switch(self, thread_id: str) -> bool:
         """切换到指定 thread"""
-        if thread_id in self._threads:
-            self._current_thread_id = thread_id
-            self._save()
-            return True
-        return False
+        self._current_thread_id = thread_id
+        return True
 
     def get_current(self) -> Optional[Thread]:
         """获取当前 thread"""
         if self._current_thread_id:
-            return self._threads.get(self._current_thread_id)
+            return asyncio.run(self._store.get_thread(self._current_thread_id))
         return None
 
-    def rename(self, thread_id: str, new_name: str) -> bool:
+    async def rename(self, thread_id: str, new_name: str) -> bool:
         """重命名 thread"""
-        if thread_id in self._threads:
-            self._threads[thread_id].name = new_name
-            self._threads[thread_id].updated_at = datetime.now(timezone.utc)
-            self._save()
+        thread = await self._store.get_thread(thread_id)
+        if thread:
+            thread.name = new_name
+            thread.updated_at = datetime.now(timezone.utc)
+            await self._store.save_thread(thread)
             return True
         return False
 
-    def delete(self, thread_id: str) -> bool:
+    async def delete(self, thread_id: str) -> bool:
         """删除 thread"""
-        if thread_id in self._threads:
-            del self._threads[thread_id]
-            if self._current_thread_id == thread_id:
-                self._current_thread_id = None
-            self._save()
-            return True
-        return False
+        if self._current_thread_id == thread_id:
+            self._current_thread_id = None
+        return await self._store.delete_thread(thread_id)
 
-    def archive(self, thread_id: str) -> bool:
+    async def archive(self, thread_id: str) -> bool:
         """归档 thread"""
-        if thread_id in self._threads:
-            self._threads[thread_id].is_archived = True
-            self._save()
+        thread = await self._store.get_thread(thread_id)
+        if thread:
+            thread.is_archived = True
+            await self._store.save_thread(thread)
             return True
         return False
 
-    def update_thread(self, thread: Thread):
-        """更新 thread（保存修改）"""
-        if thread.id in self._threads:
-            self._threads[thread.id] = thread
-            self._save()
+    async def update_thread(self, thread: Thread):
+        """更新 thread"""
+        await self._store.save_thread(thread)
+        # 更新消息
+        for msg in thread.messages:
+            await self._store.add_message(thread.id, msg)
 
     @classmethod
     def reset(cls):
