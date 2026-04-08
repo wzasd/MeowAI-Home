@@ -2,7 +2,7 @@ from typing import Dict, List, Optional
 from datetime import datetime, timezone
 import asyncio
 
-from src.thread.models import Thread
+from src.thread.models import Thread, Message
 from src.thread.stores.sqlite_store import SQLiteStore
 from src.thread.stores.migration import check_needs_migration, migrate_json_to_sqlite
 
@@ -78,10 +78,20 @@ class ThreadManager:
         return True
 
     def get_current(self) -> Optional[Thread]:
-        """获取当前 thread"""
-        if self._current_thread_id:
+        """获取当前 thread（自动处理事件循环）"""
+        if not self._current_thread_id:
+            return None
+
+        try:
+            # 检查是否在运行的事件循环中
+            loop = asyncio.get_running_loop()
+            # 在已有循环中，使用 nest_asyncio
+            import nest_asyncio
+            nest_asyncio.apply()
             return asyncio.run(self._store.get_thread(self._current_thread_id))
-        return None
+        except RuntimeError:
+            # 没有运行的事件循环，直接使用 asyncio.run()
+            return asyncio.run(self._store.get_thread(self._current_thread_id))
 
     async def rename(self, thread_id: str, new_name: str) -> bool:
         """重命名 thread"""
@@ -109,11 +119,25 @@ class ThreadManager:
         return False
 
     async def update_thread(self, thread: Thread):
-        """更新 thread"""
+        """
+        更新 thread（只保存 metadata，不重复添加消息）
+
+        Args:
+            thread: 要更新的 thread
+        """
         await self._store.save_thread(thread)
-        # 更新消息
-        for msg in thread.messages:
-            await self._store.add_message(thread.id, msg)
+        # 注意：不再重复添加所有消息
+        # 消息应该通过 add_message() 单独添加，而不是每次更新时重新插入
+
+    async def add_message(self, thread_id: str, message: Message) -> None:
+        """
+        添加单条消息到 thread
+
+        Args:
+            thread_id: thread ID
+            message: 要添加的消息
+        """
+        await self._store.add_message(thread_id, message)
 
     @classmethod
     def reset(cls):
