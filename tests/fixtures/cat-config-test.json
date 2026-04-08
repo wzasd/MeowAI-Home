@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "breeds": [
+    {
+      "id": "test_orange",
+      "name": "测试橘猫",
+      "displayName": "测试阿橘",
+      "roles": ["developer"],
+      "mentionPatterns": ["@test_dev", "@测试阿橘"],
+      "roleDescription": "测试角色",
+      "personality": "测试性格",
+      "catchphrases": ["测试口头禅"],
+      "cli": {
+        "command": "echo",
+        "outputFormat": "stream-json",
+        "defaultArgs": []
+      }
+    }
+  ]
+}
