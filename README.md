@@ -112,3 +112,55 @@ meowai chat --resume
 - **>=2 只猫**: 默认进入 `#ideate` 并行讨论
 - **1 只猫**: 默认进入 `#execute` 串行执行
 - **显式标签**: 使用用户指定的模式
+
+## MCP 回调机制 (Phase 3.4)
+
+猫可以调用外部工具，支持结构化路由：
+
+```bash
+# 猫会自动调用工具完成任务
+@dev 帮我搜索 Thread 类的定义
+
+# 结构化路由（替代 @mention）
+@dev 检查这个代码
+# 猫回复：<mcp:targetCats>{"cats": ["review"]}</mcp:targetCats>
+# 自动路由给 @review
+```
+
+### 可用工具
+
+| 工具 | 功能 | 示例 |
+|------|------|------|
+| `post_message` | 发送消息到当前 thread | 猫主动汇报进度 |
+| `search_files` | 搜索项目文件 | 查找代码定义 |
+| `targetCats` | 声明下一个回复的猫 | 结构化 A2A 路由 |
+
+### 使用方式
+
+猫在回复中嵌入工具调用：
+
+```markdown
+我来帮你搜索相关代码。
+
+<mcp:search_files>
+{"query": "class A2AController", "path": "src"}
+</mcp:search_files>
+
+找到问题了！请 @review 帮我检查。
+
+<mcp:targetCats>
+{"cats": ["inky"]}
+</mcp:targetCats>
+```
+
+系统会自动：
+1. 执行 `search_files` 工具
+2. 解析 `targetCats` 并路由给墨点
+3. 返回干净的内容给用户
+
+### TODO (v0.4.0)
+
+- [ ] HTTP-based MCP Server
+- [ ] 异步工具调用
+- [ ] 更多工具（update_task, request_permission）
+- [ ] 插件机制支持外部工具注册
