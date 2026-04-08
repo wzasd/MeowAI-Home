@@ -30,11 +30,11 @@ class ThreadManager:
 
     def _load(self):
         """从磁盘加载 threads"""
-        self._threads = self._persistence.load()
+        self._threads, self._current_thread_id = self._persistence.load()
 
     def _save(self):
         """保存到磁盘"""
-        self._persistence.save(self._threads)
+        self._persistence.save(self._threads, self._current_thread_id)
 
     def create(self, name: str, current_cat_id: str = "orange") -> Thread:
         """创建新 thread"""
@@ -59,6 +59,7 @@ class ThreadManager:
         """切换到指定 thread"""
         if thread_id in self._threads:
             self._current_thread_id = thread_id
+            self._save()
             return True
         return False
 

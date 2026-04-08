@@ -60,7 +60,7 @@ class Thread:
     @classmethod
     def create(cls, name: str, current_cat_id: str = DEFAULT_CAT_ID) -> "Thread":
         """创建新 thread"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         return cls(
             id=str(uuid.uuid4())[:8],  # 短ID便于使用
             name=name,

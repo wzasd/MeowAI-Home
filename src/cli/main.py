@@ -1,13 +1,18 @@
 import click
 import asyncio
 from src.router.agent_router import AgentRouter
+from src.cli.thread_commands import thread_cli
 
 
 @click.group()
-@click.version_option(version='0.2.0', prog_name='meowai')
+@click.version_option(version='0.3.0', prog_name='meowai')
 def cli():
     """MeowAI Home - 温馨的流浪猫AI收容所 🐱"""
     pass
+
+
+# 注册 thread 命令
+cli.add_command(thread_cli)
 
 
 @cli.command()
