@@ -96,3 +96,61 @@ async def test_serial_execute(mock_agents):
     # 串行模式下按顺序
     assert responses[0].cat_id == "orange"
     assert responses[1].cat_id == "inky"
+
+
+@pytest.mark.asyncio
+async def test_mcp_callback_integration(mock_agents):
+    """测试 MCP 回调集成"""
+    controller = A2AController(mock_agents)
+
+    # Mock 服务返回带回调的内容
+    mock_agents[0]["service"].chat_stream = mock_async_iterator([
+        'Found it!',
+        '<mcp:targetCats>{"cats": ["inky"]}</mcp:targetCats>'
+    ])
+
+    intent = IntentResult(
+        intent="execute",
+        explicit=True,
+        prompt_tags=[],
+        clean_message="测试"
+    )
+    thread = Thread.create("Test")
+
+    responses = []
+    async for response in controller.execute(intent, "测试", thread):
+        responses.append(response)
+
+    # 验证 targetCats 被解析
+    assert responses[0].targetCats == ["inky"]
+    assert "targetCats" not in responses[0].content
+
+
+@pytest.mark.asyncio
+async def test_target_cats_routing(mock_agents):
+    """测试 targetCats 结构化路由"""
+    controller = A2AController(mock_agents)
+
+    # 第一只猫返回 targetCats 指向第二只猫
+    mock_agents[0]["service"].chat_stream = mock_async_iterator([
+        'Please help me @inky',
+        '<mcp:targetCats>{"cats": ["inky"]}</mcp:targetCats>'
+    ])
+
+    intent = IntentResult(
+        intent="execute",
+        explicit=True,
+        prompt_tags=[],
+        clean_message="测试"
+    )
+    thread = Thread.create("Test")
+
+    responses = []
+    async for response in controller.execute(intent, "测试", thread):
+        responses.append(response)
+
+    # 验证两只猫都响应了
+    assert len(responses) == 2
+    # 第二个响应应该是 inky
+    assert responses[1].cat_id == "inky"
+

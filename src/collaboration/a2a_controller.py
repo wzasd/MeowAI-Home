@@ -1,9 +1,12 @@
 from dataclasses import dataclass
-from typing import List, Dict, Any, AsyncIterator
+from typing import List, Dict, Any, AsyncIterator, Optional
 import asyncio
 
 from src.collaboration.intent_parser import IntentResult
 from src.thread.models import Thread, Message
+from src.collaboration.mcp_client import MCPClient
+from src.collaboration.mcp_tools import TOOL_REGISTRY
+from src.collaboration.callback_parser import parse_callbacks
 
 
 @dataclass
@@ -12,6 +15,7 @@ class CatResponse:
     cat_id: str
     cat_name: str
     content: str
+    targetCats: Optional[List[str]] = None  # 新增：结构化路由
 
 
 class A2AController:
@@ -74,22 +78,41 @@ class A2AController:
         message: str,
         thread: Thread
     ) -> AsyncIterator[CatResponse]:
-        """串行 execute 模式 - 猫按顺序接力"""
-        for i, agent_info in enumerate(self.agents):
+        """串行 execute 模式 - 猫按顺序接力（支持 targetCats 路由）"""
+        # 如果没有显式路由，使用 agents 顺序
+        agent_queue = list(self.agents)  # 创建副本
+        executed_cats = set()
+
+        while agent_queue:
+            agent_info = agent_queue.pop(0)
             service = agent_info["service"]
             name = agent_info["name"]
             breed_id = agent_info["breed_id"]
 
-            # 构建提示，包含之前猫的回复
-            context_msg = self._build_context(message, thread, i)
+            # 跳过已执行的猫
+            if breed_id in executed_cats:
+                continue
+            executed_cats.add(breed_id)
+
+            # 构建提示
+            context_msg = self._build_context(message, thread, len(executed_cats) - 1)
 
             response = await self._call_cat(
                 service, name, breed_id, context_msg, thread
             )
             yield response
 
-            # 添加到 thread 供下一只猫参考
+            # 添加到 thread
             thread.add_message("assistant", response.content, cat_id=breed_id)
+
+            # 处理 targetCats 路由
+            if response.targetCats:
+                # 将指定的猫加入队列
+                for target_cat in response.targetCats:
+                    for agent in self.agents:
+                        if agent["breed_id"] == target_cat and target_cat not in executed_cats:
+                            agent_queue.append(agent)
+                            break
 
     async def _call_cat(
         self,
@@ -99,25 +122,50 @@ class A2AController:
         message: str,
         thread: Thread
     ) -> CatResponse:
-        """调用单只猫"""
-        # 构建系统提示
+        """调用单只猫（支持 MCP 回调）"""
+        # 1. 创建 MCPClient 并注册工具
+        mcp_client = MCPClient(thread)
+        for tool_name, config in TOOL_REGISTRY.items():
+            mcp_client.register_tool(
+                name=tool_name,
+                description=config["description"],
+                parameters=config["parameters"],
+                handler=config["handler"]
+            )
+
+        # 2. 构建系统提示
         system_prompt = service.build_system_prompt()
 
-        # 添加协作上下文
+        # 3. 添加协作上下文
         if len(self.agents) > 1:
             system_prompt += self._build_collaboration_context(breed_id)
 
-        # 调用服务
+        # 4. 添加 MCP 工具说明
+        system_prompt += mcp_client.build_tools_prompt()
+
+        # 5. 调用服务
         chunks = []
         async for chunk in service.chat_stream(message, system_prompt):
             chunks.append(chunk)
 
-        content = "".join(chunks)
+        raw_content = "".join(chunks)
 
+        # 6. 解析回调
+        parsed = parse_callbacks(raw_content)
+
+        # 7. 执行工具调用
+        for tool_call in parsed.tool_calls:
+            # 跳过 targetCats（已解析）
+            if tool_call.tool_name == "targetcats":
+                continue
+            await mcp_client.call(tool_call.tool_name, tool_call.params)
+
+        # 8. 返回处理后的响应
         return CatResponse(
             cat_id=breed_id,
             cat_name=name,
-            content=content
+            content=parsed.clean_content,
+            targetCats=parsed.targetCats if parsed.targetCats else None
         )
 
     def _build_collaboration_context(self, current_cat_id: str) -> str:
