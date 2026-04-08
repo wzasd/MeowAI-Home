@@ -1,11 +1,12 @@
 import click
-import asyncio
 from src.router.agent_router import AgentRouter
 from src.cli.thread_commands import thread_cli, get_cat_mention, run_async
+from src.collaboration.intent_parser import parse_intent
+from src.collaboration.a2a_controller import A2AController
 
 
 @click.group()
-@click.version_option(version='0.3.1', prog_name='meowai')
+@click.version_option(version='0.3.2', prog_name='meowai')
 def cli():
     """MeowAI Home - 温馨的流浪猫AI收容所 🐱"""
     pass
@@ -59,6 +60,7 @@ def chat(cat: str, thread_id: str, resume: bool):
     # 显示状态
     click.echo(f"\n🐱 Thread: {thread.name} | 猫: @{get_cat_mention(cat_id)}")
     click.echo(f"   历史: {len(thread.messages)}条消息")
+    click.echo("💡 提示: 使用 #ideate 多猫并行讨论, #execute 串行接力执行")
     click.echo("   (按 Ctrl+C 退出)\n")
 
     try:
@@ -69,39 +71,43 @@ def chat(cat: str, thread_id: str, resume: bool):
             if '@' not in message:
                 message = f"@{cat_id} {message}"
 
-            # 添加用户消息到 thread
-            thread.add_message("user", message)
+            # 路由消息获取 agents
+            agents = router.route_message(message)
 
-            # 路由消息
+            # 解析 intent
+            intent_result = parse_intent(message, len(agents))
+
+            # 显示模式信息
+            if intent_result.explicit:
+                mode_str = "并行讨论" if intent_result.intent == "ideate" else "串行接力"
+                click.echo(f"🔄 模式: {mode_str} ({intent_result.intent})")
+
+            if intent_result.prompt_tags:
+                click.echo(f"🏷️  标签: {', '.join(intent_result.prompt_tags)}")
+
+            # 添加用户消息到 thread（使用清理后的消息）
+            thread.add_message("user", intent_result.clean_message)
+
+            # 使用 A2AController 执行协作
             try:
-                agents = router.route_message(message)
+                controller = A2AController(agents)
 
-                for agent_info in agents:
-                    service = agent_info["service"]
-                    name = agent_info["name"]
-                    breed_id = agent_info["breed_id"]
+                async def run_collaboration():
+                    async for response in controller.execute(
+                        intent_result,
+                        intent_result.clean_message,
+                        thread
+                    ):
+                        click.echo(f"\n{response.cat_name}: {response.content}\n")
 
-                    click.echo(f"\n{name}: ", nl=False)
+                        # 添加回复到 thread
+                        thread.add_message(
+                            "assistant",
+                            response.content,
+                            cat_id=response.cat_id
+                        )
 
-                    # 构建包含历史上下文的系统提示
-                    system_prompt = build_thread_aware_prompt(
-                        service, thread, breed_id
-                    )
-
-                    # 流式响应
-                    async def stream_response():
-                        chunks = []
-                        async for chunk in service.chat_stream(message, system_prompt):
-                            chunks.append(chunk)
-                            click.echo(chunk, nl=False)
-                        click.echo()
-                        return "".join(chunks)
-
-                    response = asyncio.run(stream_response())
-
-                    # 添加猫回复到 thread
-                    thread.add_message("assistant", response, cat_id=breed_id)
-                    click.echo()
+                run_async(run_collaboration())
 
                 # 保存 thread
                 run_async(manager.update_thread(thread))
@@ -110,27 +116,8 @@ def chat(cat: str, thread_id: str, resume: bool):
                 click.echo(f"\n❌ 错误: {str(e)}\n")
 
     except KeyboardInterrupt:
-        click.echo(f"\n\n🐱 再见喵～对话已保存到 thread: {thread.name}\n")
+        click.echo(f"\n\n🐱 再见喵～对话已保存\n")
         run_async(manager.update_thread(thread))
-
-
-def build_thread_aware_prompt(service, thread, breed_id):
-    """构建包含 thread 历史的系统提示"""
-    base_prompt = service.build_system_prompt()
-
-    if not thread.messages:
-        return base_prompt
-
-    # 添加历史上下文（最近 10 条）
-    history_lines = ["\n## 对话历史"]
-    for msg in thread.messages[-10:]:
-        if msg.role == "user":
-            history_lines.append(f"用户: {msg.content}")
-        else:
-            cat_name = msg.cat_id or "猫"
-            history_lines.append(f"{cat_name}: {msg.content[:100]}...")
-
-    return base_prompt + "\n" + "\n".join(history_lines)
 
 
 if __name__ == '__main__':
