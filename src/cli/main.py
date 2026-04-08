@@ -87,6 +87,8 @@ def chat(cat: str, thread_id: str, resume: bool):
 
             # 添加用户消息到 thread（使用清理后的消息）
             thread.add_message("user", intent_result.clean_message)
+            # 立即持久化用户消息（避免重复）
+            run_async(manager.add_message(thread.id, thread.messages[-1]))
 
             # 使用 A2AController 执行协作
             try:
@@ -106,6 +108,8 @@ def chat(cat: str, thread_id: str, resume: bool):
                             response.content,
                             cat_id=response.cat_id
                         )
+                        # 立即持久化 assistant 消息（避免重复）
+                        await manager.add_message(thread.id, thread.messages[-1])
 
                 run_async(run_collaboration())
 

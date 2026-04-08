@@ -78,12 +78,18 @@ class SQLiteStore(ThreadStore, MessageStore):
             self._db = None
 
     async def save_thread(self, thread: Thread) -> None:
-        """保存 thread"""
+        """保存 thread（使用 UPSERT 避免触发 CASCADE DELETE）"""
         db = await self._get_db()
         await db.execute("""
-            INSERT OR REPLACE INTO threads
+            INSERT INTO threads
             (id, name, created_at, updated_at, current_cat_id, is_archived)
             VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                current_cat_id = excluded.current_cat_id,
+                is_archived = excluded.is_archived
         """, (
             thread.id,
             thread.name,
