@@ -1,6 +1,5 @@
 """MCP 工具实现"""
 from typing import Any, Dict, List
-import subprocess
 import os
 
 from src.thread.models import Thread
@@ -35,31 +34,40 @@ async def search_files_tool(query: str, path: str = ".") -> Dict[str, Any]:
     Returns:
         {"matches": [{"file": str, "line": int, "content": str}]}
     """
+    from pathlib import Path
+
     matches = []
+    max_matches = 10
 
-    # 使用 grep 进行搜索
     try:
-        # 限制搜索范围，避免搜索过大
-        result = subprocess.run(
-            ["grep", "-r", "-n", "--include=*.py", "--include=*.md", query, path],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        base_path = Path(path)
 
-        if result.returncode == 0:
-            for line in result.stdout.splitlines()[:10]:  # 最多返回 10 条
-                # 格式: file:line:content
-                if ":" in line:
-                    parts = line.split(":", 2)
-                    if len(parts) >= 3:
-                        matches.append({
-                            "file": parts[0],
-                            "line": int(parts[1]),
-                            "content": parts[2][:100]  # 截断内容
-                        })
-    except subprocess.TimeoutExpired:
-        return {"matches": [], "error": "Search timeout"}
+        # 遍历 .py 和 .md 文件
+        for pattern in ["*.py", "*.md"]:
+            for file_path in base_path.rglob(pattern):
+                if len(matches) >= max_matches:
+                    break
+
+                try:
+                    # 逐行读取文件
+                    with file_path.open('r', encoding='utf-8', errors='ignore') as f:
+                        for line_num, line in enumerate(f, 1):
+                            if query.lower() in line.lower():  # 大小写不敏感
+                                matches.append({
+                                    "file": str(file_path.relative_to(base_path)),
+                                    "line": line_num,
+                                    "content": line.strip()[:100]  # 截断内容
+                                })
+
+                                if len(matches) >= max_matches:
+                                    break
+                except Exception:
+                    # 跳过无法读取的文件
+                    continue
+
+            if len(matches) >= max_matches:
+                break
+
     except Exception as e:
         return {"matches": [], "error": str(e)}
 
