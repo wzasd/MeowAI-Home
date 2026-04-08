@@ -9,6 +9,12 @@ from src.collaboration.mcp_client import (
     MCPResult,
     MCPTool,
 )
+from src.collaboration.mcp_tools import (
+    TOOL_REGISTRY,
+    post_message_tool,
+    search_files_tool,
+    target_cats_tool,
+)
 
 __all__ = [
     "IntentParser",
@@ -18,4 +24,8 @@ __all__ = [
     "MCPClient",
     "MCPResult",
     "MCPTool",
+    "TOOL_REGISTRY",
+    "post_message_tool",
+    "search_files_tool",
+    "target_cats_tool",
 ]
