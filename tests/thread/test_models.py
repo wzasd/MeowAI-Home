@@ -86,3 +86,28 @@ def test_thread_from_dict():
     assert thread.name == "Test Thread"
     assert thread.current_cat_id == "patch"
     assert len(thread.messages) == 1
+
+
+def test_message_from_dict_missing_fields():
+    """测试消息反序列化缺少字段"""
+    data = {"role": "user", "content": "Test"}  # 缺少 timestamp
+    with pytest.raises(ValueError, match="missing required fields"):
+        Message.from_dict(data)
+
+
+def test_message_from_dict_invalid_role():
+    """测试消息反序列化无效 role"""
+    data = {
+        "role": "hacker",
+        "content": "Test",
+        "timestamp": datetime.now().isoformat()
+    }
+    with pytest.raises(ValueError, match="Invalid role"):
+        Message.from_dict(data)
+
+
+def test_add_message_invalid_role():
+    """测试添加消息时无效 role"""
+    thread = Thread.create("Test")
+    with pytest.raises(ValueError, match="Invalid role"):
+        thread.add_message("invalid", "content")

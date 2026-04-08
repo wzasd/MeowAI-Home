@@ -1,16 +1,21 @@
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import List, Literal, Optional
 import uuid
+
+# 常量定义
+DEFAULT_CAT_ID = "orange"
+VALID_ROLES = ("user", "assistant")
+RoleType = Literal["user", "assistant"]
 
 
 @dataclass
 class Message:
     """单条消息"""
-    role: str  # "user" | "assistant"
+    role: RoleType
     content: str
     cat_id: Optional[str] = None  # 如果是猫回复，记录是哪只
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict:
         return {
@@ -22,8 +27,19 @@ class Message:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Message":
+        # 验证必填字段
+        required = {"role", "content", "timestamp"}
+        missing = required - data.keys()
+        if missing:
+            raise ValueError(f"Message missing required fields: {missing}")
+
+        # 验证 role 值
+        role = data["role"]
+        if role not in VALID_ROLES:
+            raise ValueError(f"Invalid role: {role}, must be one of {VALID_ROLES}")
+
         return cls(
-            role=data["role"],
+            role=role,
             content=data["content"],
             cat_id=data.get("cat_id"),
             timestamp=datetime.fromisoformat(data["timestamp"])
@@ -38,11 +54,11 @@ class Thread:
     created_at: datetime
     updated_at: datetime
     messages: List[Message] = field(default_factory=list)
-    current_cat_id: str = "orange"  # 默认使用阿橘
+    current_cat_id: str = DEFAULT_CAT_ID
     is_archived: bool = False
 
     @classmethod
-    def create(cls, name: str, current_cat_id: str = "orange") -> "Thread":
+    def create(cls, name: str, current_cat_id: str = DEFAULT_CAT_ID) -> "Thread":
         """创建新 thread"""
         now = datetime.now()
         return cls(
@@ -54,10 +70,12 @@ class Thread:
             messages=[]
         )
 
-    def add_message(self, role: str, content: str, cat_id: Optional[str] = None):
+    def add_message(self, role: RoleType, content: str, cat_id: Optional[str] = None) -> None:
         """添加消息并更新更新时间"""
+        if role not in VALID_ROLES:
+            raise ValueError(f"Invalid role: {role}, must be one of {VALID_ROLES}")
         self.messages.append(Message(role=role, content=content, cat_id=cat_id))
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> dict:
         return {
@@ -72,12 +90,18 @@ class Thread:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Thread":
+        # 验证必填字段
+        required = {"id", "name", "created_at", "updated_at"}
+        missing = required - data.keys()
+        if missing:
+            raise ValueError(f"Thread missing required fields: {missing}")
+
         return cls(
             id=data["id"],
             name=data["name"],
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),
             messages=[Message.from_dict(m) for m in data.get("messages", [])],
-            current_cat_id=data.get("current_cat_id", "orange"),
+            current_cat_id=data.get("current_cat_id", DEFAULT_CAT_ID),
             is_archived=data.get("is_archived", False)
         )
