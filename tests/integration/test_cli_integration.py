@@ -9,7 +9,7 @@ def test_cli_version():
     result = runner.invoke(cli, ['--version'])
 
     assert result.exit_code == 0
-    assert '0.2.0' in result.output
+    assert '0.3.' in result.output  # Accept any 0.3.x version
 
 
 def test_cli_help():

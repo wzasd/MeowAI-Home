@@ -21,7 +21,7 @@ def test_persistence_save_and_load():
         assert persistence.exists()
 
         # 加载
-        loaded = persistence.load()
+        loaded, current_id = persistence.load()
         assert len(loaded) == 1
         assert thread.id in loaded
         assert loaded[thread.id].name == "测试会话"
@@ -34,8 +34,9 @@ def test_persistence_load_empty():
         storage_path = Path(tmpdir) / "threads.json"
         persistence = ThreadPersistence(storage_path)
 
-        loaded = persistence.load()
+        loaded, current_id = persistence.load()
         assert loaded == {}
+        assert current_id is None
         assert not persistence.exists()
 
 
@@ -50,7 +51,7 @@ def test_persistence_multiple_threads():
         threads = {t1.id: t1, t2.id: t2}
 
         persistence.save(threads)
-        loaded = persistence.load()
+        loaded, current_id = persistence.load()
 
         assert len(loaded) == 2
         assert loaded[t1.id].current_cat_id == "orange"
@@ -64,5 +65,6 @@ def test_persistence_corrupted_file():
         storage_path.write_text("invalid json")
         persistence = ThreadPersistence(storage_path)
 
-        loaded = persistence.load()
+        loaded, current_id = persistence.load()
         assert loaded == {}  # 返回空而不是崩溃
+        assert current_id is None
