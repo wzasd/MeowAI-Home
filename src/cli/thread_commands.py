@@ -1,6 +1,20 @@
 import click
+import asyncio
 from datetime import datetime
 from src.thread import ThreadManager
+
+
+def run_async(coro):
+    """运行异步协程，兼容已有事件循环的情况"""
+    try:
+        loop = asyncio.get_running_loop()
+        # 如果已经在事件循环中，使用 ensure_future
+        import nest_asyncio
+        nest_asyncio.apply()
+        return asyncio.run(coro)
+    except RuntimeError:
+        # 没有运行的事件循环，直接使用 asyncio.run
+        return asyncio.run(coro)
 
 
 def format_thread(thread, is_current=False):
@@ -29,7 +43,7 @@ def create_thread(name, cat):
     cat_map = {"@dev": "orange", "@review": "inky", "@research": "patch"}
     cat_id = cat_map.get(cat, "orange")
 
-    thread = manager.create(name, current_cat_id=cat_id)
+    thread = run_async(manager.create(name, current_cat_id=cat_id))
     manager.switch(thread.id)  # 自动切换到新 thread
 
     click.echo(f"✅ 创建 thread: {thread.name} ({thread.id})")
@@ -42,7 +56,7 @@ def create_thread(name, cat):
 def list_threads(all):
     """列出所有 threads"""
     manager = ThreadManager()
-    threads = manager.list(include_archived=all)
+    threads = run_async(manager.list(include_archived=all))
     current = manager.get_current()
 
     if not threads:
@@ -84,7 +98,7 @@ def rename_thread(thread_id, new_name):
     """重命名 thread"""
     manager = ThreadManager()
 
-    if manager.rename(thread_id, new_name):
+    if run_async(manager.rename(thread_id, new_name)):
         click.echo(f"✅ 已重命名为: {new_name}")
     else:
         click.echo(f"❌ Thread 不存在: {thread_id}")
@@ -96,7 +110,7 @@ def rename_thread(thread_id, new_name):
 def delete_thread(thread_id, force):
     """删除 thread"""
     manager = ThreadManager()
-    thread = manager.get(thread_id)
+    thread = run_async(manager.get(thread_id))
 
     if not thread:
         click.echo(f"❌ Thread 不存在: {thread_id}")
@@ -105,7 +119,7 @@ def delete_thread(thread_id, force):
     if not force:
         click.confirm(f"确定删除 thread '{thread.name}'? 此操作不可撤销。", abort=True)
 
-    manager.delete(thread_id)
+    run_async(manager.delete(thread_id))
     click.echo(f"✅ 已删除: {thread.name}")
 
 
@@ -114,13 +128,13 @@ def delete_thread(thread_id, force):
 def archive_thread(thread_id):
     """归档 thread"""
     manager = ThreadManager()
-    thread = manager.get(thread_id)
+    thread = run_async(manager.get(thread_id))
 
     if not thread:
         click.echo(f"❌ Thread 不存在: {thread_id}")
         return
 
-    manager.archive(thread_id)
+    run_async(manager.archive(thread_id))
     click.echo(f"✅ 已归档: {thread.name}")
     click.echo("   使用 `meowai thread list --all` 查看")
 

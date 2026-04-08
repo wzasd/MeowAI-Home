@@ -74,3 +74,20 @@ meowai chat --thread <id>                   # 使用指定 thread
 - **自动保存**: 每次对话自动保存到当前 thread
 - **上下文记忆**: 猫能看到 thread 中的历史对话
 - **快速切换**: 在不同任务间无缝切换
+
+## 会话持久化 (Phase 3.2)
+
+数据存储在 SQLite 数据库 (`~/.meowai/meowai.db`)，支持：
+
+- **自动迁移**: 从 JSON 格式自动迁移到 SQLite
+- **消息搜索**: 支持内容搜索
+- **会话恢复**: 快速恢复上次对话
+
+```bash
+# 恢复上次会话
+meowai chat --resume
+
+# 数据存储位置
+~/.meowai/meowai.db       # SQLite 数据库
+~/.meowai/threads.json    # 旧格式（自动迁移后会保留）
+```

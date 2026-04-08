@@ -1,11 +1,11 @@
 import click
 import asyncio
 from src.router.agent_router import AgentRouter
-from src.cli.thread_commands import thread_cli, get_cat_mention
+from src.cli.thread_commands import thread_cli, get_cat_mention, run_async
 
 
 @click.group()
-@click.version_option(version='0.3.0', prog_name='meowai')
+@click.version_option(version='0.3.1', prog_name='meowai')
 def cli():
     """MeowAI Home - 温馨的流浪猫AI收容所 🐱"""
     pass
@@ -18,24 +18,39 @@ cli.add_command(thread_cli)
 @cli.command()
 @click.option('--cat', default=None, help='覆盖默认猫（@dev/@review/@research）')
 @click.option('--thread', 'thread_id', help='指定 thread ID')
-def chat(cat: str, thread_id: str):
+@click.option('--resume', is_flag=True, help='恢复上次会话')
+def chat(cat: str, thread_id: str, resume: bool):
     """与猫猫开始对话"""
     from src.thread import ThreadManager
 
     manager = ThreadManager()
     router = AgentRouter()
 
-    # 确定使用的 thread
-    if thread_id:
-        if not manager.switch(thread_id):
+    # 处理 --resume
+    if resume:
+        threads = run_async(manager.list())
+        if threads:
+            thread = threads[0]  # 最近更新的 thread
+            manager.switch(thread.id)
+            click.echo(f"🔄 恢复会话: {thread.name}")
+            click.echo(f"   历史消息: {len(thread.messages)}条")
+        else:
+            click.echo("暂无历史会话，创建新 thread...")
+            thread = run_async(manager.create("默认会话"))
+            manager.switch(thread.id)
+    # 处理 --thread
+    elif thread_id:
+        thread = run_async(manager.get(thread_id))
+        if not thread:
             click.echo(f"❌ Thread 不存在: {thread_id}")
             return
-        thread = manager.get_current()
+        manager.switch(thread_id)
     else:
+        # 默认行为：使用当前 thread 或创建新 thread
         thread = manager.get_current()
         if not thread:
             click.echo("🐱 还没有 thread，正在创建...")
-            thread = manager.create("默认会话")
+            thread = run_async(manager.create("默认会话"))
             manager.switch(thread.id)
 
     # 确定使用的猫
@@ -89,14 +104,14 @@ def chat(cat: str, thread_id: str):
                     click.echo()
 
                 # 保存 thread
-                manager.update_thread(thread)
+                run_async(manager.update_thread(thread))
 
             except Exception as e:
                 click.echo(f"\n❌ 错误: {str(e)}\n")
 
     except KeyboardInterrupt:
         click.echo(f"\n\n🐱 再见喵～对话已保存到 thread: {thread.name}\n")
-        manager.update_thread(thread)
+        run_async(manager.update_thread(thread))
 
 
 def build_thread_aware_prompt(service, thread, breed_id):
