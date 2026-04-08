@@ -91,3 +91,24 @@ meowai chat --resume
 ~/.meowai/meowai.db       # SQLite 数据库
 ~/.meowai/threads.json    # 旧格式（自动迁移后会保留）
 ```
+
+## A2A 智能协作 (Phase 3.3)
+
+支持多猫协作模式：
+
+```bash
+# 并行讨论模式 (#ideate) - 多猫同时给出独立见解
+@dev @review 这个架构怎么样？#ideate
+
+# 串行执行模式 (#execute) - 猫按顺序接力完成
+@dev @review 实现这个功能 #execute
+
+# 批判性分析 (#critique) - 严格审查找出问题
+@review 检查这段代码 #critique
+```
+
+### 自动模式选择
+
+- **>=2 只猫**: 默认进入 `#ideate` 并行讨论
+- **1 只猫**: 默认进入 `#execute` 串行执行
+- **显式标签**: 使用用户指定的模式
