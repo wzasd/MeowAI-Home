@@ -1,5 +1,5 @@
 import pytest
-from src.router import AgentRouter
+from src.router.agent_router import AgentRouter
 from src.config import CatConfigLoader
 
 
