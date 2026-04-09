@@ -61,3 +61,41 @@ def test_case_insensitive():
     result = parse_intent("帮我 #IDEATE #CRITIQUE", cat_count=2)
     assert result.intent == "ideate"
     assert "critique" in result.prompt_tags
+
+
+class TestWorkflowIntent:
+    def test_brainstorm_tag(self):
+        result = parse_intent("#brainstorm 给我方案", 3)
+        assert result.workflow == "brainstorm"
+
+    def test_parallel_tag(self):
+        result = parse_intent("#parallel 分工实现", 3)
+        assert result.workflow == "parallel"
+
+    def test_autoplan_tag(self):
+        result = parse_intent("#autoplan 实现登录", 3)
+        assert result.workflow == "auto_plan"
+
+    def test_autoplan_mention(self):
+        result = parse_intent("@planner 实现登录", 3)
+        assert result.workflow == "auto_plan"
+
+    def test_auto_brainstorm_3plus_cats(self):
+        result = parse_intent("@orange @inky @patch 给方案", 3)
+        assert result.workflow == "brainstorm"
+        assert result.explicit is False
+
+    def test_no_workflow_1_cat(self):
+        result = parse_intent("hello", 1)
+        assert result.workflow is None
+
+    def test_no_workflow_2_cats(self):
+        result = parse_intent("@orange @inky hello", 2)
+        assert result.workflow is None
+        assert result.intent == "ideate"
+
+    def test_explicit_intent_overrides_auto_workflow(self):
+        result = parse_intent("#execute @orange @inky @patch 做这个", 3)
+        assert result.workflow is None
+        assert result.intent == "execute"
+        assert result.explicit is True

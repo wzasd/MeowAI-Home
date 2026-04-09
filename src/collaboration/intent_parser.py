@@ -7,6 +7,7 @@ PromptTagType = Literal["critique"]
 
 VALID_INTENTS = {"ideate", "execute"}
 VALID_PROMPT_TAGS = {"critique"}
+WORKFLOW_TAGS = {"brainstorm": "brainstorm", "parallel": "parallel", "autoplan": "auto_plan"}
 TAG_PATTERN = re.compile(r"#(\w+)", re.IGNORECASE)
 
 
@@ -17,6 +18,7 @@ class IntentResult:
     explicit: bool  # 是否显式指定
     prompt_tags: List[PromptTagType]
     clean_message: str  # 移除标签后的消息
+    workflow: Optional[str] = None
 
 
 class IntentParser:
@@ -34,9 +36,16 @@ class IntentParser:
             IntentResult
         """
         tags = self._extract_tags(message)
+        workflow = self._find_workflow_tag(tags)
 
-        # 确定 intent
+        if not workflow and "@planner" in message.lower():
+            workflow = "auto_plan"
+
         explicit_intent = self._find_explicit_intent(tags)
+
+        if not workflow and not explicit_intent and cat_count >= 3:
+            workflow = "brainstorm"
+
         if explicit_intent:
             intent = explicit_intent
             explicit = True
@@ -45,17 +54,15 @@ class IntentParser:
             intent = "ideate" if cat_count >= 2 else "execute"
             explicit = False
 
-        # 提取 prompt tags
         prompt_tags = self._find_prompt_tags(tags)
-
-        # 清理消息
         clean_message = self._strip_tags(message)
 
         return IntentResult(
             intent=intent,
             explicit=explicit,
             prompt_tags=prompt_tags,
-            clean_message=clean_message
+            clean_message=clean_message,
+            workflow=workflow,
         )
 
     def _extract_tags(self, message: str) -> List[str]:
@@ -69,13 +76,16 @@ class IntentParser:
                 return tag  # type: ignore
         return None
 
+    def _find_workflow_tag(self, tags: List[str]) -> Optional[str]:
+        """查找 workflow 标签"""
+        for tag in tags:
+            if tag in WORKFLOW_TAGS:
+                return WORKFLOW_TAGS[tag]
+        return None
+
     def _find_prompt_tags(self, tags: List[str]) -> List[PromptTagType]:
         """查找 prompt tags"""
-        result = []
-        for tag in tags:
-            if tag in VALID_PROMPT_TAGS:
-                result.append(tag)  # type: ignore
-        return result
+        return [tag for tag in tags if tag in VALID_PROMPT_TAGS]  # type: ignore
 
     def _strip_tags(self, message: str) -> str:
         """移除所有标签"""

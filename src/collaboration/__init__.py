@@ -15,6 +15,8 @@ from src.collaboration.mcp_tools import (
     search_files_tool,
     target_cats_tool,
 )
+from src.collaboration.mcp_executor import MCPExecutor
+from src.collaboration.skill_injector import SkillInjector
 
 __all__ = [
     "IntentParser",
@@ -28,4 +30,6 @@ __all__ = [
     "post_message_tool",
     "search_files_tool",
     "target_cats_tool",
+    "MCPExecutor",
+    "SkillInjector",
 ]
