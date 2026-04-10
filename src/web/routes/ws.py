@@ -92,11 +92,14 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
                 )
                 template_factory = WorkflowTemplateFactory()
 
+        memory_service = getattr(app.state, "memory_service", None)
+
         controller = A2AController(
             agents,
             session_chain=session_chain,
             dag_executor=dag_executor,
             template_factory=template_factory,
+            memory_service=memory_service,
         )
 
         if intent.workflow:

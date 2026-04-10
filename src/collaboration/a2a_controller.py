@@ -22,11 +22,12 @@ class CatResponse:
 class A2AController:
     """A2A 协作控制器"""
 
-    def __init__(self, agents: List[Dict[str, Any]], session_chain=None, dag_executor=None, template_factory=None):
+    def __init__(self, agents: List[Dict[str, Any]], session_chain=None, dag_executor=None, template_factory=None, memory_service=None):
         self.agents = agents
         self.session_chain = session_chain
         self.dag_executor = dag_executor
         self.template_factory = template_factory
+        self.memory_service = memory_service
         self.mcp_executor = MCPExecutor()
         self.skill_injector = SkillInjector()
 
