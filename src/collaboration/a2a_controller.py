@@ -131,6 +131,9 @@ class A2AController:
             other_cats = [a["name"] for a in self.agents if a["breed_id"] != breed_id]
             if other_cats:
                 system_prompt += f"\n\n## 协作说明\n本次有多只猫参与：{', '.join(other_cats)}。请专注于你的角色，给出独立见解。"
+                # Why-First protocol for multi-agent handoffs
+                from src.evolution.why_first import build_handoff_prompt
+                system_prompt += f"\n\n{build_handoff_prompt()}"
 
         system_prompt += self.mcp_executor.build_tools_prompt(client)
 
@@ -230,7 +233,12 @@ class A2AController:
         parts = [message, "\n\n## 前面的回复"]
         for msg in thread.messages[-current_index:]:
             if msg.role == "assistant" and msg.cat_id:
-                parts.append(f"\n{msg.cat_id}: {msg.content[:200]}...")
+                parts.append(f"\n{msg.cat_id}: {msg.content[:300]}...")
+                # Try to extract Why-First handoff notes
+                from src.evolution.why_first import parse_handoff_note, format_handoff_note
+                note = parse_handoff_note(msg.content)
+                if note:
+                    parts.append(f"\n[结构化交接]: {format_handoff_note(note)}")
         parts.append("\n\n请继续完成或补充：")
         return "".join(parts)
 
