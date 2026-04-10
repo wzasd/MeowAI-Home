@@ -16,6 +16,17 @@ COMMAND_BLACKLIST = [
     r"\brm\s+-rf\b", r"\bsudo\b", r"\bchmod\s+777\b",
     r"\bcurl\b.*\|\s*sh\b", r"\bwget\b.*\|\s*sh\b",
     r"\bmkfs\b", r"\bdd\b.*of=/dev/", r"\bformat\b",
+    # Phase 8.1: 进程保护 + 系统安全
+    r"\bkill\s+-9\b", r"\bkillall\b", r"\bpkill\b",
+    r"\bshutdown\b", r"\breboot\b", r"\bhalt\b",
+]
+
+# 受保护的配置文件（铁律 3: 配置只读）
+PROTECTED_PATHS = [
+    "cat-config.json",
+    ".env",
+    "pyproject.toml",
+    "skills/manifest.yaml",
 ]
 
 # 允许的 git 操作白名单
@@ -31,6 +42,15 @@ def _is_command_safe(command: str) -> bool:
         if re.search(pattern, command, re.IGNORECASE):
             return False
     return True
+
+
+def _is_path_protected(path: str) -> bool:
+    """检查文件路径是否受铁律保护"""
+    p = Path(path)
+    for protected in PROTECTED_PATHS:
+        if p.name == protected or str(p).endswith(protected):
+            return True
+    return False
 
 
 def _truncate_output(output: str) -> str:
@@ -69,7 +89,9 @@ async def read_file_tool(path: str, start_line: int = None, end_line: int = None
 
 
 async def write_file_tool(path: str, content: str, create_dirs: bool = False) -> Dict[str, Any]:
-    """写入文件"""
+    """写入文件（受保护路径检查）"""
+    if _is_path_protected(path):
+        return {"error": f"Path is protected by iron laws: {path}"}
     file_path = Path(path)
     try:
         if create_dirs:

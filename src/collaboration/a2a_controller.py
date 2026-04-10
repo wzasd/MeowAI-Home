@@ -9,6 +9,7 @@ from src.collaboration.mcp_executor import MCPExecutor
 from src.collaboration.skill_injector import SkillInjector
 from src.models.types import AgentMessageType, InvocationOptions
 from src.memory.entity_extractor import extract_entities
+from src.governance.iron_laws import get_iron_laws_prompt
 
 
 @dataclass
@@ -122,7 +123,7 @@ class A2AController:
 
     async def _call_cat(self, service, name: str, breed_id: str, message: str, thread: Thread) -> CatResponse:
         client = self.mcp_executor.register_tools(thread)
-        system_prompt = service.build_system_prompt()
+        system_prompt = get_iron_laws_prompt() + "\n\n" + service.build_system_prompt()
 
         if len(self.agents) > 1:
             other_cats = [a["name"] for a in self.agents if a["breed_id"] != breed_id]
