@@ -147,3 +147,40 @@ class TestAutoRetrieveMemory:
 
         options = recorder.call_args[0][1]
         assert "相关记忆" not in options.system_prompt
+
+
+class TestAutoExtractEntities:
+    @pytest.mark.asyncio
+    async def test_extracts_preference_from_text(self, memory_service, thread):
+        """Entity extractor finds preference in user message"""
+        service = MagicMock()
+        service.build_system_prompt.return_value = "You are a cat."
+        service.invoke = mock_invoke_stream([text_msg("OK React is nice", "orange")], "orange")
+        agents = [{"service": service, "name": "Orange", "breed_id": "orange"}]
+
+        controller = A2AController(agents, memory_service=memory_service)
+        intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="用户喜欢React")
+
+        async for r in controller.execute(intent, "用户喜欢React", thread):
+            pass
+
+        entity = memory_service.semantic.get_entity("React")
+        assert entity is not None
+        assert entity["type"] == "preference"
+
+    @pytest.mark.asyncio
+    async def test_no_extraction_when_no_patterns(self, memory_service, thread):
+        """No entities stored for plain text"""
+        service = MagicMock()
+        service.build_system_prompt.return_value = "You are a cat."
+        service.invoke = mock_invoke_stream([text_msg("OK", "orange")], "orange")
+        agents = [{"service": service, "name": "Orange", "breed_id": "orange"}]
+
+        controller = A2AController(agents, memory_service=memory_service)
+        intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="Hello there")
+
+        async for r in controller.execute(intent, "Hello there", thread):
+            pass
+
+        results = memory_service.semantic.search_entities("Hello")
+        assert len(results) == 0

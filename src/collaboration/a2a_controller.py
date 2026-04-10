@@ -8,6 +8,7 @@ from src.thread.models import Thread
 from src.collaboration.mcp_executor import MCPExecutor
 from src.collaboration.skill_injector import SkillInjector
 from src.models.types import AgentMessageType, InvocationOptions
+from src.memory.entity_extractor import extract_entities
 
 
 @dataclass
@@ -191,6 +192,13 @@ class A2AController:
                     content=response.thinking, cat_id=breed_id,
                     importance=2,
                 )
+
+        # Auto-extract entities to semantic memory
+        if self.memory_service:
+            combined = f"{message} {response.content}"
+            entities = extract_entities(combined)
+            for name, entity_type, description in entities:
+                self.memory_service.semantic.add_entity(name, entity_type, description)
 
         return response
 
