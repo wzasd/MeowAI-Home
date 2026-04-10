@@ -96,18 +96,18 @@
 **测试**: 156/156 (100%)
 **代码文件**: 47 个 Python 源文件
 
-#### 4.2 长期记忆系统 (对标 Clowder Memory) 📋 待开始
-- 📋 **三层记忆架构**:
-  - **Episodic** - 对话片段存储
-  - **Semantic** - 知识图谱 (实体、关系)
-  - **Procedural** - 技能和工作流
-- 📋 **项目知识库**:
-  - 代码库索引 (符号、依赖、调用图)
-  - 文档库 (README、API 文档、设计文档)
-  - 经验库 (踩坑记录、最佳实践)
-- 📋 **用户记忆**:
-  - 偏好记忆 (编码风格、工具选择)
-  - 上下文记忆 (项目历史、决策记录)
+#### 4.2 长期记忆系统 (对标 Clowder Memory) ✅ 已完成
+- ✅ **三层记忆架构** (FTS5 全文搜索):
+  - **Episodic** - 对话片段存储 (自动存储 + BM25 排序)
+  - **Semantic** - 知识图谱 (实体、关系、正则自动提取)
+  - **Procedural** - 工作流模式 (成功率统计、经验积累)
+- ✅ **4 种自动化行为**:
+  - 自动存储对话 (importance 分级)
+  - 自动检索注入 (系统提示记忆上下文)
+  - 自动提取实体 (偏好/技术/约束/角色)
+  - 自动记录工作流模式 (DAG 执行后)
+- ✅ **MCP 工具**: search_all_memory 跨层搜索
+- ✅ **技术选型**: SQLite+FTS5 vs 向量DB/Elasticsearch/Neo4j (详见设计规格)
   - 关系记忆 (协作历史、信任度)
 - 📋 **向量存储**:
   - SQLite + sqlite-vss (单机)
@@ -116,11 +116,11 @@
 
 #### 4.3 MCP 工具增强 (对标 Clowder MCP) 📋 待开始
 - 📋 **HTTP MCP Server** (替代本地调用)
-- 📋 **扩展工具集** (对标 Clowder 15 tools):
+- 📋 **扩展工具集** (对标 Clowder 15 tools, 当前 16 个):
   - **文件**: `read_file`, `write_file`, `search_files`, `analyze_code`
   - **命令**: `execute_command`, `run_tests`, `git_operation`
   - **网络**: `search_web`, `fetch_url`, `api_call`
-  - **记忆**: `query_memory`, `update_memory`, `search_knowledge`
+  - **记忆**: `query_memory`, `update_memory`, `search_knowledge`, `search_all_memory`
   - **协作**: `post_message`, `targetCats`, `create_thread`
   - **高级**: `plan_task`, `execute_workflow`, `validate_result`
 
@@ -136,8 +136,8 @@
 **交付物**:
 - ✅ `src/skills/` - 技能框架 + 25 技能
 - ✅ `skills/` - 技能定义文件 (25 SKILL.md)
-- ✅ `src/memory/` - 三层记忆系统 (Episodic/Semantic/Procedural)
-- ✅ `src/collaboration/mcp_tools.py` - 15 MCP 工具
+- ✅ `src/memory/` - 三层记忆系统 (Episodic/Semantic/Procedural) + FTS5 + 实体提取器
+- ✅ `src/collaboration/mcp_tools.py` - 16 MCP 工具
 - ✅ `src/collaboration/mcp_memory.py` - SQLite 记忆存储
 - 📋 `src/mcp/` - HTTP MCP Server + 扩展工具
 
@@ -148,7 +148,7 @@
 | 子阶段 | 状态 | 测试 | 完成日期 |
 |--------|------|------|----------|
 | 4.1 技能框架 | ✅ 完成 | 156/156 | 2026-04-08 |
-| 4.2 记忆系统 | 📋 待开始 | - | - |
+| 4.2 记忆系统 | ✅ 完成 | 388/388 | 2026-04-10 |
 | 4.3 MCP 增强 | 📋 待开始 | - | - |
 
 ---
@@ -582,7 +582,7 @@
 | Phase | 版本 | 核心价值 | 工作量 | 累计 | 目标日期 |
 |-------|------|---------|--------|------|---------|
 | 1-3 | v0.3.x | 基础协作能力 | ✅ 已完成 | 8 周 | ✅ 2026-04-08 |
-| 4 | v0.4.0 | 技能+记忆 | 🔨 进行中 (4.1✅) | 12 周 | 2026-05-06 |
+| 4 | v0.4.0 | 技能+记忆 | ✅ 已完成 (4.1✅ 4.2✅) | 12 周 | 2026-04-10 |
 | 5 | v0.5.0 | Web UI | ✅ 已完成 | 17 周 | ✅ 2026-04-08 |
 | 6 | v0.6.0 | 多模型 | ✅ 已完成 | 21 周 | ✅ 2026-04-09 |
 | 7 | v0.7.0 | 高级协作 | ✅ 已完成 | 26 周 | ✅ 2026-04-10 |

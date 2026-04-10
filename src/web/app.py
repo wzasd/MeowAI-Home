@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="MeowAI Home",
-        version="0.7.0",
+        version="0.8.0",
         description="Multi-Agent AI Collaboration Platform",
         lifespan=lifespan,
     )
@@ -63,7 +63,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     async def health():
-        return {"status": "ok", "version": "0.7.0"}
+        return {"status": "ok", "version": "0.8.0"}
 
     web_dist = Path(__file__).parent.parent.parent / "web" / "dist"
     if web_dist.exists():
