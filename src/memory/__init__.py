@@ -249,14 +249,29 @@ class EpisodicMemory:
         query: str,
         limit: int = 10
     ) -> List[Dict[str, Any]]:
-        """搜索对话片段"""
+        """搜索对话片段（FTS5）"""
         conn = self.db._get_conn()
-        rows = conn.execute(
-            """SELECT id, thread_id, cat_id, role, content, importance, tags, created_at
-               FROM episodic WHERE content LIKE ?
-               ORDER BY importance DESC, created_at DESC LIMIT ?""",
-            (f"%{query}%", limit)
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                """SELECT e.id, e.thread_id, e.cat_id, e.role, e.content,
+                          e.importance, e.tags, e.created_at
+                   FROM episodic_fts fts
+                   JOIN episodic e ON e.rowid = fts.rowid
+                   WHERE episodic_fts MATCH ?
+                   ORDER BY e.importance DESC, fts.rank
+                   LIMIT ?""",
+                (query, limit)
+            ).fetchall()
+            if not rows:
+                raise ValueError("FTS5 returned no results, fallback to LIKE")
+        except Exception:
+            # FTS5 MATCH syntax error or empty results → fallback to LIKE
+            rows = conn.execute(
+                """SELECT id, thread_id, cat_id, role, content, importance, tags, created_at
+                   FROM episodic WHERE content LIKE ?
+                   ORDER BY importance DESC, created_at DESC LIMIT ?""",
+                (f"%{query}%", limit)
+            ).fetchall()
         conn.close()
         return [self._row_to_dict(r) for r in rows]
 
@@ -396,22 +411,47 @@ class SemanticMemory:
         entity_type: str = None,
         limit: int = 10
     ) -> List[Dict[str, Any]]:
-        """搜索实体"""
+        """搜索实体（FTS5）"""
         conn = self.db._get_conn()
-        if entity_type:
-            rows = conn.execute(
-                """SELECT id, name, type, description FROM entities
-                   WHERE (name LIKE ? OR description LIKE ?) AND type = ?
-                   LIMIT ?""",
-                (f"%{query}%", f"%{query}%", entity_type, limit)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """SELECT id, name, type, description FROM entities
-                   WHERE name LIKE ? OR description LIKE ?
-                   LIMIT ?""",
-                (f"%{query}%", f"%{query}%", limit)
-            ).fetchall()
+        try:
+            if entity_type:
+                rows = conn.execute(
+                    """SELECT e.id, e.name, e.type, e.description
+                       FROM entities_fts fts
+                       JOIN entities e ON e.rowid = fts.rowid
+                       WHERE entities_fts MATCH ? AND e.type = ?
+                       ORDER BY fts.rank
+                       LIMIT ?""",
+                    (query, entity_type, limit)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT e.id, e.name, e.type, e.description
+                       FROM entities_fts fts
+                       JOIN entities e ON e.rowid = fts.rowid
+                       WHERE entities_fts MATCH ?
+                       ORDER BY fts.rank
+                       LIMIT ?""",
+                    (query, limit)
+                ).fetchall()
+            if not rows:
+                raise ValueError("FTS5 returned no results, fallback to LIKE")
+        except Exception:
+            # FTS5 MATCH syntax error or empty results → fallback to LIKE
+            if entity_type:
+                rows = conn.execute(
+                    """SELECT id, name, type, description FROM entities
+                       WHERE (name LIKE ? OR description LIKE ?) AND type = ?
+                       LIMIT ?""",
+                    (f"%{query}%", f"%{query}%", entity_type, limit)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT id, name, type, description FROM entities
+                       WHERE name LIKE ? OR description LIKE ?
+                       LIMIT ?""",
+                    (f"%{query}%", f"%{query}%", limit)
+                ).fetchall()
         conn.close()
         return [
             {"id": r["id"], "name": r["name"], "type": r["type"], "description": r["description"]}
@@ -520,15 +560,30 @@ class ProceduralMemory:
         return [self._row_to_dict(r) for r in rows]
 
     def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """搜索工作流"""
+        """搜索工作流（FTS5）"""
         conn = self.db._get_conn()
-        rows = conn.execute(
-            """SELECT id, name, category, steps, trigger_conditions, outcomes,
-                      success_count, fail_count, last_used_at, created_at
-               FROM procedures WHERE name LIKE ? OR steps LIKE ?
-               ORDER BY success_count DESC LIMIT ?""",
-            (f"%{query}%", f"%{query}%", limit)
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                """SELECT p.id, p.name, p.category, p.steps, p.trigger_conditions,
+                          p.outcomes, p.success_count, p.fail_count, p.last_used_at, p.created_at
+                   FROM procedures_fts fts
+                   JOIN procedures p ON p.rowid = fts.rowid
+                   WHERE procedures_fts MATCH ?
+                   ORDER BY p.success_count DESC
+                   LIMIT ?""",
+                (query, limit)
+            ).fetchall()
+            if not rows:
+                raise ValueError("FTS5 returned no results, fallback to LIKE")
+        except Exception:
+            # FTS5 MATCH syntax error or empty results → fallback to LIKE
+            rows = conn.execute(
+                """SELECT id, name, category, steps, trigger_conditions, outcomes,
+                          success_count, fail_count, last_used_at, created_at
+                   FROM procedures WHERE name LIKE ? OR steps LIKE ?
+                   ORDER BY success_count DESC LIMIT ?""",
+                (f"%{query}%", f"%{query}%", limit)
+            ).fetchall()
         conn.close()
         return [self._row_to_dict(r) for r in rows]
 
