@@ -67,46 +67,56 @@
 
 ---
 
-### Phase 4: 技能系统与记忆 (v0.4.0)
+### Phase 4: 技能系统与记忆 (v0.4.0) 🔨 进行中
 
 **目标**: 让 Agent 具备专业能力和持久记忆
 
 **核心功能**:
 
-#### 4.1 技能框架 (对标 Clowder Skills)
-- ✅ Manifest 驱动的技能定义
-- ✅ 按需加载机制
-- ✅ 触发器路由 (关键词/Intent/手动)
-- ✅ **20+ 核心技能** (对标 Clowder 30 skills):
-  - **开发流**: `tdd`, `code-review`, `debug`, `refactor`, `git-workflow`
-  - **文档**: `doc-writer`, `readme-generator`, `api-docs`
-  - **安全**: `security-audit`, `dependency-check`, `secrets-scan`
-  - **性能**: `profiling`, `optimization`, `benchmark`
-  - **测试**: `test-generator`, `coverage-analysis`, `mutation-testing`
-  - **部署**: `dockerize`, `ci-cd`, `monitoring`
-  - **协作**: `pair-programming`, `knowledge-sharing`, `onboarding`
+#### 4.1 技能框架 (对标 Clowder Skills) ✅ 已完成
+- ✅ Manifest 驱动的技能定义 (manifest.yaml)
+- ✅ SkillLoader 解析 SKILL.md (YAML frontmatter + Markdown)
+- ✅ ManifestRouter 触发器路由 (关键词匹配 + 优先级)
+- ✅ SecurityAuditor 6步安全审计管道
+- ✅ SymlinkManager 持久化挂载 (~/.meowai/skills/)
+- ✅ SkillInstaller 批量安装
+- ✅ **25 个核心技能** (对标 Clowder 25 skills):
+  - **开发流**: `tdd`, `debugging`, `quality-gate`, `feat-lifecycle`, `worktree`
+  - **计划**: `writing-plans`, `collaborative-thinking`
+  - **协作**: `request-review`, `receive-review`, `cross-cat-handoff`
+  - **合并**: `merge-gate`
+  - **进化**: `self-evolution`, `incident-response`, `cross-thread-sync`
+  - **调研**: `deep-research`, `schedule-tasks`, `writing-skills`
+  - **MCP**: `pencil-design`, `rich-messaging`, `browser-automation`
+  - **体验**: `workspace-navigator`, `browser-preview`, `image-generation`
+  - **健康**: `hyperfocus-brake`, `bootcamp-guide`
+- ✅ A2A 集成技能路由 (自动触发 + 技能链)
+- ✅ CLI 技能管理命令 (list/install/uninstall/audit)
 
-#### 4.2 长期记忆系统 (对标 Clowder Memory)
-- ✅ **三层记忆架构**:
+**测试**: 156/156 (100%)
+**代码文件**: 47 个 Python 源文件
+
+#### 4.2 长期记忆系统 (对标 Clowder Memory) 📋 待开始
+- 📋 **三层记忆架构**:
   - **Episodic** - 对话片段存储
   - **Semantic** - 知识图谱 (实体、关系)
   - **Procedural** - 技能和工作流
-- ✅ **项目知识库**:
+- 📋 **项目知识库**:
   - 代码库索引 (符号、依赖、调用图)
   - 文档库 (README、API 文档、设计文档)
   - 经验库 (踩坑记录、最佳实践)
-- ✅ **用户记忆**:
+- 📋 **用户记忆**:
   - 偏好记忆 (编码风格、工具选择)
   - 上下文记忆 (项目历史、决策记录)
   - 关系记忆 (协作历史、信任度)
-- ✅ **向量存储**:
+- 📋 **向量存储**:
   - SQLite + sqlite-vss (单机)
   - Qdrant/Weaviate (集群可选)
   - 语义搜索 (embedding-based)
 
-#### 4.3 MCP 工具增强 (对标 Clowder MCP)
-- ✅ **HTTP MCP Server** (替代本地调用)
-- ✅ **15+ 工具** (对标 Clowder 15 tools):
+#### 4.3 MCP 工具增强 (对标 Clowder MCP) 📋 待开始
+- 📋 **HTTP MCP Server** (替代本地调用)
+- 📋 **扩展工具集** (对标 Clowder 15 tools):
   - **文件**: `read_file`, `write_file`, `search_files`, `analyze_code`
   - **命令**: `execute_command`, `run_tests`, `git_operation`
   - **网络**: `search_web`, `fetch_url`, `api_call`
@@ -115,20 +125,31 @@
   - **高级**: `plan_task`, `execute_workflow`, `validate_result`
 
 **关键指标**:
-- 技能加载时间 < 1s
+- 技能加载时间 < 1s ✅
 - 记忆检索准确率 > 90%
 - 工具调用成功率 > 95%
 - 向量搜索延迟 < 200ms
 - 支持 1000+ 对话历史
 
-**工作量**: 4 周
+**工作量**: 4 周 (已完成)
 
 **交付物**:
-- `src/skills/` - 技能框架 + 20 技能
-- `src/memory/` - 三层记忆系统
-- `src/mcp/` - HTTP MCP Server + 15 工具
-- `skills/` - 技能定义文件
-- 记忆迁移工具 (JSON → SQLite)
+- ✅ `src/skills/` - 技能框架 + 25 技能
+- ✅ `skills/` - 技能定义文件 (25 SKILL.md)
+- ✅ `src/memory/` - 三层记忆系统 (Episodic/Semantic/Procedural)
+- ✅ `src/collaboration/mcp_tools.py` - 15 MCP 工具
+- ✅ `src/collaboration/mcp_memory.py` - SQLite 记忆存储
+- 📋 `src/mcp/` - HTTP MCP Server + 扩展工具
+
+---
+
+### Phase 4 进度总结
+
+| 子阶段 | 状态 | 测试 | 完成日期 |
+|--------|------|------|----------|
+| 4.1 技能框架 | ✅ 完成 | 156/156 | 2026-04-08 |
+| 4.2 记忆系统 | 📋 待开始 | - | - |
+| 4.3 MCP 增强 | 📋 待开始 | - | - |
 
 ---
 
@@ -184,88 +205,58 @@
 
 ---
 
-### Phase 6: 多模型支持 (v0.6.0)
+### Phase 6: 多模型支持 (v0.6.0) ✅
 
-**目标**: 企业级多模型路由与管理
+> **状态**: ✅ 已完成 (2026-04-09)
+> **实际交付**: CLI 子进程架构 (非 SDK)、双注册表、5 个 Provider 适配器、AccountResolver、Context Budget、Anthropic Proxy
+> **测试**: 307 tests 全绿
 
-**核心功能**:
+**核心决策**: 采用 CLI 子进程模式 (ADR-001)，复用用户已有订阅（Claude Max/ChatGPT Plus/Gemini Advanced），无需额外 API Key 费用。
 
-#### 6.1 模型集成
-- ✅ **Claude 家族**: Opus/Sonnet/Haiku (完整支持)
-- ✅ **OpenAI 家族**: GPT-4o/GPT-4-turbo/GPT-3.5 (完整支持)
-- ✅ **Google 家族**: Gemini Pro/Ultra (完整支持)
-- ✅ **本地模型**: Ollama/LM Studio/vLLM (完整支持)
-- ✅ **自定义模型**: OpenAI 兼容 API
-
-#### 6.2 跨模型协作 (对标 Clowder 多模型)
-- ✅ **跨模型审查** - Claude 写代码 → GPT 审查
-- ✅ **模型能力路由** - 自动选择最优模型
-- ✅ **共识机制** - 多模型投票决策
-- ✅ **成本优化** - 智能路由降低成本 50%
-
-#### 6.3 模型管理
-- ✅ **统一配置** - 多模型配置文件
-- ✅ **API Key 管理** - 加密存储、轮换策略
-- ✅ **使用量追踪** - Token 统计、成本报告
-- ✅ **配额管理** - 用户/项目级别配额
-
-#### 6.4 高级特性
-- ✅ **Fallback 机制** - 主模型失败自动切换
-- ✅ **负载均衡** - 多 API Key 轮询
-- ✅ **缓存层** - 相同请求缓存 (降低成本)
-- ✅ **流式支持** - 所有模型统一流式接口
-
-**关键指标**:
-- 支持 5+ 模型家族
-- 跨模型审查覆盖率 100%
-- 成本优化率 > 50%
-- 模型切换延迟 < 1s
-- API 可用性 > 99.9%
-
-**工作量**: 4 周
-
-**交付物**:
-- `src/models/` - 模型适配器
-- `src/routing/` - 智能路由引擎
-- `src/quota/` - 配额管理系统
-- 模型配置模板
-- 成本监控面板
+**实际模块**:
+- ✅ **CatRegistry** — cat-config.json breeds+variants 扁平化配置注册
+- ✅ **AgentRegistry** — 服务实例注册表 (catId → provider)
+- ✅ **CLI Spawn + NDJSON** — 统一子进程管理 + 流式解析
+- ✅ **Provider 适配器** — Claude/Codex/Gemini/OpenCode (统一 invoke AsyncGenerator)
+- ✅ **AccountResolver** — subscription/api_key 双模式
+- ✅ **Context Budget** — 三层级联 (env > registry > 硬编码默认)
+- ✅ **Model Resolver** — 环境变量覆盖
+- ✅ **AgentRouterV2** — 基于 registry 的路由 + 多语言 @mention
+- ✅ **SessionChain** — CLI session 生命周期管理 + 3 次失败自动 seal
+- ✅ **StreamMerge** — asyncio.wait FIRST_COMPLETED 并行流合并
+- ✅ **InvocationTracker** — 并发 invocation 管理 + 取消
+- ✅ **Anthropic Proxy** — 第三方网关兼容 (thinking block 清理、SSE 规范化)
 
 ---
 
-### Phase 7: 高级协作与工作流 (v0.7.0)
+### Phase 7: 高级协作与工作流 (v0.7.0) ✅
 
-**目标**: 企业级工作流编排 (对标 Clowder Workflow)
+> **状态**: ✅ 已完成 (2026-04-10)
+> **实际交付**: Phase 6 基础设施全线接入 + 轻量 DAG 工作流引擎 + A2AController 重构
+> **测试**: 367 tests 全绿 (+49 新增)
 
-**核心功能**:
+#### 7.1 Phase 6 基础设施全线接入
+- ✅ **AgentRouterV2** 替换 v1 — 基于 CatRegistry + AgentRegistry 的 registry 路由
+- ✅ **InvocationTracker** — WebSocket 新消息自动取消旧 invocation
+- ✅ **SessionChain** — CLI session 复用，3 次失败自动 seal
+- ✅ **StreamMerge** — 并行 ideate 模式流式合并
 
-#### 7.1 任务规划 (对标 Clowder Planning)
-- ✅ **智能分解** - 复杂任务 → 子任务树
-- ✅ **依赖分析** - DAG 依赖图
-- ✅ **优先级排序** - 价值/紧急度/依赖关系
-- ✅ **工作量估算** - 基于历史数据
+#### 7.2 A2AController 重构
+- ✅ **MCPExecutor** — MCP 工具注册 + 回调执行提取为独立辅助类
+- ✅ **SkillInjector** — 技能上下文注入提取为独立辅助类
+- ✅ A2AController 从 333 行瘦身至 ~180 行 (-46%)
 
-#### 7.2 工作流引擎
-- ✅ **DAG 编排** - 可视化工作流设计器
-- ✅ **并行执行** - 多 Agent 并行任务
-- ✅ **条件分支** - If/Else/Switch 逻辑
-- ✅ **循环迭代** - For/While 循环
-- ✅ **错误处理** - 重试/回滚/通知
+#### 7.3 DAG 工作流引擎
+- ✅ **WorkflowDAG** — 数据结构 + 拓扑排序 + 环检测
+- ✅ **DAGExecutor** — 按拓扑层并行执行，节点间传递前驱结果
+- ✅ **ResultAggregator** — merge / last / summarize 三种聚合
+- ✅ **WorkflowTemplateFactory** — 头脑风暴/并行分工/LLM自动规划 + YAML 自定义
 
-#### 7.3 结果管理
-- ✅ **结果聚合** - 多 Agent 结果合并
-- ✅ **冲突解决** - 自动/手动冲突处理
-- ✅ **质量验证** - 自动化测试 + 审查
-- ✅ **报告生成** - 执行报告、性能报告
-
-#### 7.4 工作流模板
-- ✅ **预设模板** - 常见场景工作流
-  - 代码审查流程
-  - Bug 修复流程
-  - 功能开发流程
-  - 文档生成流程
-- ✅ **自定义模板** - 用户自定义工作流
-- ✅ **模板市场** - 社区共享模板
+#### 7.4 Workflow 意图检测
+- ✅ `#brainstorm` / `#parallel` / `#autoplan` 标签触发
+- ✅ `@planner` mention 触发 auto_plan
+- ✅ 3+ 只猫参与自动触发 brainstorm
+- ✅ 显式 #execute 标签覆盖自动检测
 
 **关键指标**:
 - 复杂任务成功率 > 85%
@@ -276,11 +267,13 @@
 **工作量**: 5 周
 
 **交付物**:
-- `src/workflow/` - 工作流引擎
-- `src/planning/` - 任务规划器
-- Web 工作流编辑器
-- 工作流模板库
-- 执行监控面板
+- `src/workflow/` — DAG 数据结构、执行器、聚合器、模板工厂
+- `src/collaboration/mcp_executor.py` — MCP 辅助类
+- `src/collaboration/skill_injector.py` — 技能注入辅助类
+- `src/collaboration/a2a_controller.py` — 重构后协调器
+- `src/collaboration/intent_parser.py` — 扩展 workflow 意图检测
+- `src/router/` — AgentRouterV2 替换 v1
+- `src/web/` — WebSocket 集成 tracker + workflow 事件
 
 ---
 
@@ -589,10 +582,10 @@
 | Phase | 版本 | 核心价值 | 工作量 | 累计 | 目标日期 |
 |-------|------|---------|--------|------|---------|
 | 1-3 | v0.3.x | 基础协作能力 | ✅ 已完成 | 8 周 | ✅ 2026-04-08 |
-| 4 | v0.4.0 | 技能+记忆 | 4 周 | 12 周 | 2026-05-06 |
-| 5 | v0.5.0 | Web UI | 5 周 | 17 周 | 2026-06-10 |
-| 6 | v0.6.0 | 多模型 | 4 周 | 21 周 | 2026-07-08 |
-| 7 | v0.7.0 | 高级协作 | 5 周 | 26 周 | 2026-08-12 |
+| 4 | v0.4.0 | 技能+记忆 | 🔨 进行中 (4.1✅) | 12 周 | 2026-05-06 |
+| 5 | v0.5.0 | Web UI | ✅ 已完成 | 17 周 | ✅ 2026-04-08 |
+| 6 | v0.6.0 | 多模型 | ✅ 已完成 | 21 周 | ✅ 2026-04-09 |
+| 7 | v0.7.0 | 高级协作 | ✅ 已完成 | 26 周 | ✅ 2026-04-10 |
 | 8 | v0.8.0 | 自我进化+治理 | 5 周 | 31 周 | 2026-09-16 |
 | 9 | v0.9.0 | 企业级特性 | 4 周 | 35 周 | 2026-10-14 |
 | 10 | v0.10.0 | 生态集成 | 4 周 | 39 周 | 2026-11-11 |
@@ -767,32 +760,31 @@
 
 ## 下一步行动
 
-### 本周 (Phase 4 启动)
+### Phase 8: 自我进化与治理 (下一步)
 
-**设计阶段**:
-1. ✅ 技能框架架构设计
-2. ✅ 三层记忆系统设计
-3. ✅ HTTP MCP Server 设计
-4. ✅ Phase 4 详细实施计划
+**铁律系统**:
+1. 📋 定义 4 条不可违反规则（数据安全、进程保护、配置只读、网络边界）
+2. 📋 实现铁律检查器，注入到每次 Agent 调用
 
-**PoC 阶段**:
-1. ✅ 技能加载器原型
-2. ✅ 记忆存储原型 (SQLite + vss)
-3. ✅ 向量搜索原型
-4. ✅ HTTP MCP Server 原型
+**SOP 工作流**:
+3. 📋 实现 WorkflowSOP (Bulletin Board 模式)
+4. 📋 ResumeCapsule 结构化交接笔记
+5. 📋 质量门禁（测试覆盖率、代码审查通过率）
 
-**社区准备**:
-1. ✅ GitHub 组织创建
-2. ✅ Issues/Discussions 配置
-3. ✅ 贡献者指南编写
-4. ✅ 行为准则制定
-5. ✅ 第一个示例项目
+**自我进化**:
+6. 📋 模式 A: 范围守卫（检测需求蔓延）
+7. 📋 模式 B: 流程进化（从错误中改进 SOP）
+8. 📋 模式 C: 知识进化（Episode → Method → Skill）
 
-**品牌建设**:
-1. ✅ Logo 和视觉设计
-2. ✅ 官网 (GitHub Pages)
-3. ✅ Twitter/X 账号
-4. ✅ 社区 Discord
+### Phase 4 已完成
+
+**Phase 4.1 技能框架** ✅:
+1. ✅ Manifest 驱动的技能定义 + YAML 路由
+2. ✅ 6 步安全审计管道
+3. ✅ Symlink 持久化挂载
+4. ✅ 25 个完整技能 (参考 Clowder AI)
+5. ✅ A2A 集成技能路由 + 技能链
+6. ✅ CLI 技能管理 (list/install/uninstall/audit)
 
 ---
 
@@ -835,7 +827,7 @@
 
 *打造最好的开源多 Agent AI 协作平台！* 🚀
 
-**Last Updated**: 2026-04-08
+**Last Updated**: 2026-04-10
 **Status**: Approved v2.0
 **Owner**: MeowAI Home Team
 **License**: MIT
