@@ -232,7 +232,101 @@ WHERE r.source_id = ?
 
 ---
 
-*花花合上设计文档："Phase 4 全部完成——技能、记忆、工具，三位一体。可以准备 Phase 5 Web UI 了。"*
+## 第三夜：10 个子代理的突袭
+
+铲屎官批准了设计规格和实施计划。三只猫决定用子代理驱动开发——10 个 Task，每个 Task 一个独立代理。
+
+### 实施过程
+
+**Task 1-2: FTS5 升级**
+
+阿橘派了第一个代理去改 `MemoryDB._init_tables()`。9 条 SQL——3 个 FTS5 虚拟表 + 6 个同步触发器（INSERT/DELETE 各 3 个）。所有表用 `content=` 模式，数据零冗余。
+
+第二个代理升级三个 `search()` 方法。从 `LIKE '%query%'` 变成 FTS5 `MATCH ? ORDER BY rank`，外层包了 try/except 降级到 LIKE。
+
+墨点发现了一个坑："FTS5 默认的 unicode61 分词器会完全忽略 CJK 字符——中文字被当成分隔符，MATCH 返回 0 结果但不报错。"
+
+阿橘的解决方案："当 FTS5 返回空结果时，触发 LIKE 降级。中文走 LIKE，英文走 FTS5。"
+
+**Task 3: 实体提取器**
+
+独立模块 `entity_extractor.py`，4 种正则模式：
+
+```python
+ENTITY_PATTERNS = [
+    (r'用户(?:喜欢|偏好|习惯(?:用)?|常用)\s*(\w+)', 'preference'),
+    (r'项目(?:使用|采用|基于)\s*(\w+)(?:\s*(?:框架|库|工具|语言|数据库))?', 'technology'),
+    (r'(?:不能用|不要用|避免)\s*(\w+)', 'constraint'),
+    (r'(\w+)(?:负责|擅长)\s*(.+?)(?:[。，,;\n]|$)', 'role'),
+]
+```
+
+代理发现 `\w+` 在 Python Unicode 模式下会匹配中文字符，"用户喜欢React框架"会把"React框架"整体捕获。调整了测试输入避免歧义。
+
+**Task 4: 接线**
+
+三处小改动把 MemoryService 连上：
+- `app.py` lifespan 里 `app.state.memory_service = MemoryService()`
+- `ws.py` 里 `memory_service = getattr(app.state, "memory_service", None)`
+- `A2AController` 构造函数加 `memory_service=None`
+
+**Task 5-7: 三种自动化行为**
+
+花花设计的 4 种自动化行为，代理们一个一个接上：
+
+**自动存储**（Task 5）：`_call_cat()` 返回 CatResponse 后，存 3 条 episodic 记录——用户消息 importance=3、猫回复 importance=5、思考过程 importance=2。
+
+**自动检索**（Task 6）：`_call_cat()` 构建系统提示时，调 `build_context()` 搜索三层记忆，结果作为 `## 相关记忆` 注入。
+
+**自动提取**（Task 7）：存储完对话后，把用户消息和猫回复拼在一起，跑正则提取，找到的实体存进 semantic memory。
+
+代理遇到了 `Thread` 构造函数参数不匹配和 `IntentResult` 缺字段的问题——代码库里的实际接口比计划里写的复杂。代理自己修了，用 `Thread.create()` 替代直接构造。
+
+**Task 8: 工作流记录**
+
+ws.py 里 DAG 执行后，记录工作流模式到 procedural memory。记录的是 `workflow_cat_ids`（实际参与的猫 ID 列表），加上成功/失败统计。
+
+**Task 9: 第 16 个 MCP 工具**
+
+`search_all_memory`——跨三层记忆搜索。关键词分词后每层各搜一遍，去重后返回。
+
+**Task 10: 版本号 + 路线图**
+
+v0.7.0 → v0.8.0。路线图更新 Phase 4.2 状态。
+
+### 墨点的最终审查
+
+"……388 个测试，0 失败。Phase 4.2 升级完成。"
+
+她翻了翻变更记录：
+
+| 项目 | 变化 |
+|------|------|
+| 测试数 | 367 → 388 (+21) |
+| 新增文件 | 2 (entity_extractor.py, test_a2a_memory.py) |
+| 修改文件 | 8 |
+| FTS5 虚拟表 | 3 (episodic, entities, procedures) |
+| 同步触发器 | 6 (INSERT + DELETE × 3) |
+| 自动化行为 | 4 (存储、检索、提取、记录) |
+| MCP 工具 | 15 → 16 |
+
+"……够了。Phase 4 全部完成。"
+
+---
+
+## 统计
+
+| 项目 | 数量 |
+|------|------|
+| 模块 | 2 (src/memory/ + entity_extractor) |
+| 数据表 | 5 + 3 FTS5 虚拟表 |
+| 测试 | 388 (100% 通过) |
+| MCP 工具 | 16 |
+| 版本 | v0.8.0 |
+
+---
+
+*花花合上设计文档："Phase 4 全部完成——技能、记忆、工具，三位一体。下一个是 Phase 8 自我进化与治理。"*
 
 *阿橘趴在键盘上："先让我睡一觉..."*
 
