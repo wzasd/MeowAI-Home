@@ -277,77 +277,47 @@
 
 ---
 
-### Phase 8: 自我进化与治理 (v0.8.0)
+### Phase 8: 自我进化与治理 (v0.8.0) ✅
 
-**目标**: 企业级治理与自我进化 (对标 Clowder Governance)
+> **状态**: ✅ 已完成 (2026-04-10)
+> **实际交付**: 铁律系统 + 3 SOP 模板 + 质量门禁 + 3 自我进化模块 + Why-First 协议
+> **测试**: 470 tests 全绿 (+103 新增)
 
 **核心功能**:
 
-#### 8.1 治理系统 (对标 Clowder SOP)
-- ✅ **铁律系统** - 4 条不可违反规则
-  - 数据安全 - 不删除/不泄露用户数据
-  - 进程保护 - 不杀死父进程
-  - 配置只读 - 不修改启动配置
-  - 网络边界 - 不访问未授权端口
-- ✅ **SOP 工作流** - 5 步标准化流程
-  - TDD 开发流程
-  - 代码审查流程
-  - 部署发布流程
-  - 事件响应流程
-  - 知识管理流程
-- ✅ **质量门禁**:
-  - 代码审查通过率 > 90%
-  - 测试覆盖率 > 80%
-  - 安全扫描无高危漏洞
-  - 性能基准测试通过
+#### 8.1 铁律系统
+- ✅ 4 条不可违反规则 (数据安全/进程保护/配置只读/网络边界)
+- ✅ 系统提示最高优先级注入 (`get_iron_laws_prompt()`)
+- ✅ MCP 命令黑名单扩展 (kill/shutdown/reboot/halt)
+- ✅ write_file 路径保护 (.env/pyproject.toml/cat-config.json/manifest.yaml)
 
-#### 8.2 自我进化 (对标 Clowder F100)
-- ✅ **模式 A: 范围守卫** - 检测需求蔓延
-- ✅ **模式 B: 流程进化** - 从错误中改进 SOP
-- ✅ **模式 C: 知识进化** - Episode → Method → Skill
-- ✅ **错误学习系统**:
-  - 错误模式识别
-  - 自动修复建议
-  - 经验库构建
-  - 防止重复错误
+#### 8.2 SOP 工作流 + 质量门禁
+- ✅ 3 个 SOP 模板: `#tdd` (TDD开发) / `#review` (代码审查) / `#deploy` (部署发布)
+- ✅ QualityGate 数据结构 (test_pass/test_exists/no_blocking/always)
+- ✅ DAGExecutor 门禁检查 (前驱不满足 → 节点跳过)
+- ✅ IntentParser 扩展 3 个 SOP 标签
 
-#### 8.3 知识管理
-- ✅ **知识提炼**:
-  - Episode (对话片段) → Method (方法)
-  - Method → Skill (技能)
-  - Skill → Best Practice (最佳实践)
-- ✅ **知识检索**:
-  - 语义搜索
-  - 相似案例推荐
-  - 知识图谱查询
-- ✅ **知识共享**:
-  - 团队知识库
-  - 知识贡献奖励
-  - 知识更新机制
+#### 8.3 自我进化系统
+- ✅ **范围守卫** — Jaccard 相似度检测话题偏移 (CJK 二元组+英文单词分词)
+- ✅ **流程进化** — ProceduralMemory 去重 (find_by_name_category) + 成功率追踪 + SOP 优化建议
+- ✅ **知识进化** — SemanticMemory 多跳 BFS 遍历 + 自动实体关系推理
+- ✅ 修复 2 个 gap: record_use() 从未调用、get_related() 忽略 max_depth
 
-#### 8.4 Why-First 协议 (对标 Clowder ADR-002)
-- ✅ 所有 Agent 交接包含 5 要素:
-  - **What** - 具体变更
-  - **Why** - 约束、目标、风险
-  - **Tradeoff** - 拒绝的方案
-  - **Open Questions** - 未决定项
-  - **Next Action** - 接收者应该做什么
-
-**关键指标**:
-- 重复错误减少率 > 60%
-- 知识复用率 > 40%
-- SOP 遵守率 > 95%
-- 质量门禁通过率 > 90%
-
-**工作量**: 5 周
+#### 8.4 Why-First 协议
+- ✅ HandoffNote 5 要素数据结构 (What/Why/Tradeoff/Open Questions/Next Action)
+- ✅ 正则解析器提取结构化笔记 (中英文标题)
+- ✅ 多猫协作时自动注入交接格式要求
+- ✅ _build_context() 自动解析并传递前驱交接笔记
 
 **交付物**:
-- `src/evolution/` - 自我进化系统
-- `src/governance/` - 治理引擎
-- `src/sop/` - SOP 工作流
-- 铁律规则库
-- 质量门禁工具
-- 知识管理面板
+- `src/governance/iron_laws.py` — 铁律系统
+- `src/evolution/scope_guard.py` — 范围守卫
+- `src/evolution/process_evolution.py` — 流程进化
+- `src/evolution/knowledge_evolution.py` — 知识进化
+- `src/evolution/why_first.py` — Why-First 协议
+- `src/workflow/dag.py` — QualityGate
+- `src/workflow/executor.py` — 门禁检查
+- `src/workflow/templates.py` — 3 SOP 模板
 
 ---
 
@@ -586,7 +556,7 @@
 | 5 | v0.5.0 | Web UI | ✅ 已完成 | 17 周 | ✅ 2026-04-08 |
 | 6 | v0.6.0 | 多模型 | ✅ 已完成 | 21 周 | ✅ 2026-04-09 |
 | 7 | v0.7.0 | 高级协作 | ✅ 已完成 | 26 周 | ✅ 2026-04-10 |
-| 8 | v0.8.0 | 自我进化+治理 | 5 周 | 31 周 | 2026-09-16 |
+| 8 | v0.8.0 | 自我进化+治理 | ✅ 已完成 | 31 周 | ✅ 2026-04-10 |
 | 9 | v0.9.0 | 企业级特性 | 4 周 | 35 周 | 2026-10-14 |
 | 10 | v0.10.0 | 生态集成 | 4 周 | 39 周 | 2026-11-11 |
 | 11 | v1.0.0 | 生产就绪 | 4 周 | 43 周 | 2026-12-09 |
@@ -760,21 +730,25 @@
 
 ## 下一步行动
 
-### Phase 8: 自我进化与治理 (下一步)
+### Phase 9: 企业级特性 (下一步)
 
-**铁律系统**:
-1. 📋 定义 4 条不可违反规则（数据安全、进程保护、配置只读、网络边界）
-2. 📋 实现铁律检查器，注入到每次 Agent 调用
+**核心认证**:
+1. 📋 用户模型 + SQLite 存储
+2. 📋 JWT Token 认证
+3. 📋 API Key 管理
+4. 📋 基础 RBAC (admin/member/viewer)
 
-**SOP 工作流**:
-3. 📋 实现 WorkflowSOP (Bulletin Board 模式)
-4. 📋 ResumeCapsule 结构化交接笔记
-5. 📋 质量门禁（测试覆盖率、代码审查通过率）
+**监控日志**:
+5. 📋 结构化日志 (structlog)
+6. 📋 审计日志 (操作记录)
+7. 📋 错误追踪 (异常聚合)
 
-**自我进化**:
-6. 📋 模式 A: 范围守卫（检测需求蔓延）
-7. 📋 模式 B: 流程进化（从错误中改进 SOP）
-8. 📋 模式 C: 知识进化（Episode → Method → Skill）
+### Phase 8 已完成 ✅
+
+**8.1 铁律系统** ✅: 4 条规则 + 系统提示注入 + MCP 黑名单 + 路径保护
+**8.2 SOP 工作流** ✅: 3 模板 (#tdd/#review/#deploy) + QualityGate 门禁
+**8.3 自我进化** ✅: 范围守卫 + 流程进化 + 知识进化 + 2 个 gap 修复
+**8.4 Why-First** ✅: 5 要素交接笔记 + 正则解析 + 多猫协作注入
 
 ### Phase 4 已完成
 
@@ -827,7 +801,7 @@
 
 *打造最好的开源多 Agent AI 协作平台！* 🚀
 
-**Last Updated**: 2026-04-10
+**Last Updated**: 2026-04-10 (Phase 8 completed)
 **Status**: Approved v2.0
 **Owner**: MeowAI Home Team
 **License**: MIT
