@@ -23,6 +23,17 @@ def text_msg(text, cat_id="orange"):
     return AgentMessage(type=AgentMessageType.TEXT, content=text, cat_id=cat_id)
 
 
+class InvokeRecorder:
+    """Wraps an async generator invoke fn to record call_args."""
+    def __init__(self, fn):
+        self._fn = fn
+        self.call_args = None
+
+    def __call__(self, *args, **kwargs):
+        self.call_args = (args, kwargs)
+        return self._fn(*args, **kwargs)
+
+
 @pytest.fixture
 def memory_service():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -92,3 +103,47 @@ class TestAutoStoreConversations:
         async for r in controller.execute(intent, "Hello", thread):
             pass
         # Should not crash
+
+
+class TestAutoRetrieveMemory:
+    @pytest.mark.asyncio
+    async def test_memory_injected_into_prompt(self, memory_service, mock_agents, thread):
+        """Relevant memory is injected into the system prompt"""
+        # Pre-populate memory
+        memory_service.store_episode(
+            "other-thread", "user", "React is great for frontend", importance=5
+        )
+
+        # Wrap invoke to record call_args
+        recorder = InvokeRecorder(mock_agents[0]["service"].invoke)
+        mock_agents[0]["service"].invoke = recorder
+
+        controller = A2AController(
+            mock_agents, memory_service=memory_service
+        )
+        intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="React")
+
+        async for r in controller.execute(intent, "React", thread):
+            pass
+
+        # Verify invoke was called with a system prompt containing memory
+        options = recorder.call_args[0][1]  # second positional arg is InvocationOptions
+        assert "相关记忆" in options.system_prompt
+
+    @pytest.mark.asyncio
+    async def test_no_memory_injection_when_empty(self, memory_service, mock_agents, thread):
+        """No memory section added when no relevant memories exist"""
+        # Wrap invoke to record call_args
+        recorder = InvokeRecorder(mock_agents[0]["service"].invoke)
+        mock_agents[0]["service"].invoke = recorder
+
+        controller = A2AController(
+            mock_agents, memory_service=memory_service
+        )
+        intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="Hello")
+
+        async for r in controller.execute(intent, "Hello", thread):
+            pass
+
+        options = recorder.call_args[0][1]
+        assert "相关记忆" not in options.system_prompt

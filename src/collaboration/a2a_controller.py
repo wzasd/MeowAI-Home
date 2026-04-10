@@ -130,6 +130,14 @@ class A2AController:
 
         system_prompt += self.mcp_executor.build_tools_prompt(client)
 
+        # Auto-retrieve relevant memory
+        if self.memory_service:
+            memory_context = self.memory_service.build_context(
+                query=message, thread_id=thread.id, max_items=5
+            )
+            if memory_context:
+                system_prompt += f"\n\n## 相关记忆\n{memory_context}"
+
         # Session chain
         session_id = None
         if self.session_chain:
