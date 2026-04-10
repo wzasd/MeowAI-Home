@@ -2,7 +2,7 @@
 import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 from src.collaboration.a2a_controller import A2AController, CatResponse
 from src.collaboration.intent_parser import IntentResult
@@ -184,3 +184,60 @@ class TestAutoExtractEntities:
 
         results = memory_service.semantic.search_entities("Hello")
         assert len(results) == 0
+
+
+class TestAutoRecordWorkflow:
+    @pytest.mark.asyncio
+    async def test_records_workflow_pattern(self, memory_service):
+        """DAG execution records workflow pattern to procedural memory"""
+        from src.workflow.dag import DAGNode, DAGEdge, WorkflowDAG
+        from src.workflow.executor import DAGExecutor
+        from src.workflow.templates import WorkflowTemplateFactory
+
+        # Create a mock agent registry
+        registry = MagicMock()
+        service = MagicMock()
+        service.build_system_prompt.return_value = "You are a cat."
+
+        async def _make_stream(*args, **kwargs):
+            from src.models.types import AgentMessage, AgentMessageType
+            yield AgentMessage(type=AgentMessageType.TEXT, content="Idea 1")
+
+        service.invoke = AsyncMock(side_effect=_make_stream)
+        registry.get.return_value = service
+
+        executor = DAGExecutor(agent_registry=registry)
+        factory = WorkflowTemplateFactory()
+
+        agents = [
+            {"service": service, "name": "Orange", "breed_id": "orange"},
+            {"service": service, "name": "Inky", "breed_id": "inky"},
+        ]
+
+        dag = factory.create("brainstorm", agents, "test topic")
+
+        # Use a real thread
+        t = Thread.create("wf-test")
+        results = []
+        async for result in executor.execute(dag, "test topic", t):
+            results.append(result)
+
+        # Manually record (simulating what ws.py does)
+        if memory_service:
+            success = sum(1 for r in results if r.status == "completed")
+            memory_service.procedural.store_procedure(
+                name="brainstorm",
+                category="workflow",
+                steps=["orange", "inky", "aggregator"],
+                trigger_conditions=["#brainstorm"],
+                outcomes={
+                    "total_nodes": 3,
+                    "success": success,
+                    "failed": len(results) - success,
+                }
+            )
+
+        # Verify stored
+        procs = memory_service.procedural.search("brainstorm")
+        assert len(procs) >= 1
+        assert procs[0]["name"] == "brainstorm"

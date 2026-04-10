@@ -109,6 +109,7 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
                 "cats": [a["breed_id"] for a in agents],
             })
 
+        workflow_cat_ids = []
         async for response in controller.execute(intent, intent.clean_message, thread):
             if response.thinking:
                 await websocket.send_json({
@@ -126,6 +127,9 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
                 "target_cats": response.targetCats,
             })
 
+            if intent.workflow:
+                workflow_cat_ids.append(response.cat_id)
+
             assistant_msg = Message(
                 role="assistant",
                 content=response.content,
@@ -136,6 +140,20 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
             await tm.add_message(thread.id, assistant_msg)
 
         await tm.update_thread(thread)
+
+        # Auto-record workflow pattern to procedural memory
+        if intent.workflow and memory_service and workflow_cat_ids:
+            memory_service.procedural.store_procedure(
+                name=intent.workflow,
+                category="workflow",
+                steps=workflow_cat_ids,
+                trigger_conditions=[intent.clean_message[:100]],
+                outcomes={
+                    "total_nodes": len(agents),
+                    "success": len(workflow_cat_ids),
+                    "failed": max(0, len(agents) - len(workflow_cat_ids)),
+                }
+            )
 
         if intent.workflow:
             await websocket.send_json({"type": "workflow_done"})
