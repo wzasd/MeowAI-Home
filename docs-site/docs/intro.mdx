@@ -2,46 +2,49 @@
 sidebar_position: 1
 ---
 
-# Tutorial Intro
+# MeowAI Home 简介
 
-Let's discover **Docusaurus in less than 5 minutes**.
+🐱 **企业级多 Agent AI 协作平台** — 开源、可商用、功能完整
 
-## Getting Started
+## 什么是 MeowAI Home？
 
-Get started by **creating a new site**.
+MeowAI Home 是 [Clowder AI](https://clowder.ai) 的开源替代品，支持多模型 Agent 协作、三层记忆系统、技能框架和企业级治理。
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+## 核心特性
 
-### What you'll need
+| 特性 | 说明 |
+|------|------|
+| 🐱 **多 Agent 协作** | @mention 路由，并行/串行执行 |
+| 🧠 **三层记忆** | Episodic / Semantic / Procedural |
+| 🎯 **技能框架** | 25+ 技能，YAML 定义 |
+| 🔧 **MCP 工具** | 16 个标准工具 |
+| 🌐 **Web UI** | React + FastAPI，流式响应 |
+| 📊 **监控告警** | Prometheus + 健康检查 |
+| 🔐 **安全审计** | JWT + RBAC + 审计日志 |
+| 🚀 **K8s 原生** | 存活/就绪探针 |
 
-- [Node.js](https://nodejs.org/en/download/) version 20.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
+## 快速开始
 
-## Generate a new site
-
-Generate a new Docusaurus site using the **classic template**.
-
-The classic template will automatically be added to your project after you run the command:
-
-```bash
-npm init docusaurus@latest my-website classic
-```
-
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
-
-The command also installs all necessary dependencies you need to run Docusaurus.
-
-## Start your site
-
-Run the development server:
+### Docker 一键启动
 
 ```bash
-cd my-website
-npm run start
+docker run -p 8000:8000 -p 5173:5173 meowai/meowai-home:latest
 ```
 
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
+访问 http://localhost:5173
 
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
+### 源码安装
 
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+```bash
+git clone https://github.com/meowai/meowai-home.git
+cd meowai-home
+pip install -e ".[dev]"
+./scripts/dev.sh
+```
+
+## 接下来
+
+- [快速开始](./quickstart) — 5 分钟上手
+- [架构设计](./architecture) — 了解系统架构
+- [部署指南](./deployment) — Docker/K8s 部署
+- [API 文档](./api) — REST API 参考

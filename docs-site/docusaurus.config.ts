@@ -5,8 +5,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'My Site',
-  tagline: 'Dinosaurs are cool',
+  title: 'MeowAI Home',
+  tagline: '企业级多 Agent AI 协作平台',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -15,15 +15,15 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://your-docusaurus-site.example.com',
+  url: 'https://meowai.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/',
+  baseUrl: '/meowai-home/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'facebook', // Usually your GitHub org/user name.
-  projectName: 'docusaurus', // Usually your repo name.
+  organizationName: 'meowai', // Usually your GitHub org/user name.
+  projectName: 'meowai-home', // Usually your repo name.
 
   onBrokenLinks: 'throw',
 
@@ -31,8 +31,8 @@ const config: Config = {
   // useful metadata like html lang. For example, if your site is Chinese, you
   // may want to replace "en" with "zh-Hans".
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en'],
+    defaultLocale: 'zh-Hans',
+    locales: ['zh-Hans'],
   },
 
   presets: [
@@ -75,9 +75,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'My Site',
+      title: 'MeowAI Home',
       logo: {
-        alt: 'My Site Logo',
+        alt: 'MeowAI Home Logo',
         src: 'img/logo.svg',
       },
       items: [
@@ -85,11 +85,11 @@ const config: Config = {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
           position: 'left',
-          label: 'Tutorial',
+          label: '文档',
         },
-        {to: '/blog', label: 'Blog', position: 'left'},
+        {to: '/blog', label: '博客', position: 'left'},
         {
-          href: 'https://github.com/facebook/docusaurus',
+          href: 'https://github.com/meowai/meowai-home',
           label: 'GitHub',
           position: 'right',
         },
@@ -99,46 +99,50 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: '文档',
           items: [
             {
-              label: 'Tutorial',
+              label: '快速开始',
               to: '/docs/intro',
             },
-          ],
-        },
-        {
-          title: 'Community',
-          items: [
             {
-              label: 'Stack Overflow',
-              href: 'https://stackoverflow.com/questions/tagged/docusaurus',
+              label: '架构设计',
+              to: '/docs/architecture',
             },
             {
-              label: 'Discord',
-              href: 'https://discordapp.com/invite/docusaurus',
-            },
-            {
-              label: 'X',
-              href: 'https://x.com/docusaurus',
+              label: 'API 参考',
+              to: '/docs/api',
             },
           ],
         },
         {
-          title: 'More',
+          title: '社区',
           items: [
             {
-              label: 'Blog',
+              label: 'GitHub',
+              href: 'https://github.com/meowai/meowai-home',
+            },
+            {
+              label: '问题反馈',
+              href: 'https://github.com/meowai/meowai-home/issues',
+            },
+          ],
+        },
+        {
+          title: '更多',
+          items: [
+            {
+              label: '博客',
               to: '/blog',
             },
             {
-              label: 'GitHub',
-              href: 'https://github.com/facebook/docusaurus',
+              label: 'Docker Hub',
+              href: 'https://hub.docker.com/r/meowai/meowai-home',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} MeowAI Home Team. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,
