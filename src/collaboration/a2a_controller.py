@@ -10,6 +10,7 @@ from src.collaboration.skill_injector import SkillInjector
 from src.models.types import AgentMessageType, InvocationOptions
 from src.memory.entity_extractor import extract_entities
 from src.governance.iron_laws import get_iron_laws_prompt
+from src.evolution.scope_guard import ScopeGuard
 
 
 @dataclass
@@ -32,6 +33,7 @@ class A2AController:
         self.memory_service = memory_service
         self.mcp_executor = MCPExecutor()
         self.skill_injector = SkillInjector()
+        self.scope_guard = ScopeGuard(memory_service.episodic) if memory_service else None
 
         self.skill_router = None
         self.skill_loader = None
@@ -140,6 +142,12 @@ class A2AController:
             if memory_context:
                 system_prompt += f"\n\n## 相关记忆\n{memory_context}"
 
+        # Scope guard: detect conversation drift
+        if self.scope_guard:
+            drift = self.scope_guard.check_drift(message, thread.id)
+            if drift.is_drift:
+                system_prompt += f"\n\n{self.scope_guard.build_drift_warning(drift)}"
+
         # Session chain
         session_id = None
         if self.session_chain:
@@ -200,6 +208,19 @@ class A2AController:
             entities = extract_entities(combined)
             for name, entity_type, description in entities:
                 self.memory_service.semantic.add_entity(name, entity_type, description)
+
+            # Auto-infer relations between extracted entities
+            if len(entities) >= 2:
+                from src.evolution.knowledge_evolution import _infer_relation_type
+                for i in range(len(entities)):
+                    for j in range(i + 1, len(entities)):
+                        name_i, type_i = entities[i][0], entities[i][1]
+                        name_j, type_j = entities[j][0], entities[j][1]
+                        existing = self.memory_service.semantic.get_related(name_i, max_depth=1)
+                        related_names = {r["name"] for r in existing}
+                        if name_j not in related_names:
+                            rel = _infer_relation_type(type_i, type_j)
+                            self.memory_service.semantic.add_relation(name_i, name_j, rel)
 
         return response
 

@@ -464,7 +464,7 @@ class SemanticMemory:
         relation_type: str = None,
         max_depth: int = 2
     ) -> List[Dict[str, Any]]:
-        """获取关联实体（支持多跳）"""
+        """获取关联实体（支持多跳 BFS）"""
         conn = self.db._get_conn()
         entity = conn.execute(
             "SELECT id FROM entities WHERE name = ?", (name,)
@@ -473,27 +473,43 @@ class SemanticMemory:
             conn.close()
             return []
 
-        # 单跳关系
-        if relation_type:
-            rows = conn.execute(
-                """SELECT e.name, e.type, r.relation_type, r.strength
-                   FROM relations r JOIN entities e ON r.target_id = e.id
-                   WHERE r.source_id = ? AND r.relation_type = ?""",
-                (entity["id"], relation_type)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """SELECT e.name, e.type, r.relation_type, r.strength
-                   FROM relations r JOIN entities e ON r.target_id = e.id
-                   WHERE r.source_id = ?""",
-                (entity["id"],)
-            ).fetchall()
-        conn.close()
+        start_id = entity["id"]
+        visited = {start_id}
+        results = []
+        queue = [(start_id, 1)]
 
-        return [
-            {"name": r["name"], "type": r["type"], "relation": r["relation_type"], "strength": r["strength"]}
-            for r in rows
-        ]
+        while queue:
+            current_id, depth = queue.pop(0)
+            if depth > max_depth:
+                continue
+
+            if relation_type:
+                rows = conn.execute(
+                    """SELECT e.id, e.name, e.type, r.relation_type, r.strength
+                       FROM relations r JOIN entities e ON r.target_id = e.id
+                       WHERE r.source_id = ? AND r.relation_type = ?""",
+                    (current_id, relation_type)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT e.id, e.name, e.type, r.relation_type, r.strength
+                       FROM relations r JOIN entities e ON r.target_id = e.id
+                       WHERE r.source_id = ?""",
+                    (current_id,)
+                ).fetchall()
+
+            for row in rows:
+                results.append({
+                    "name": row["name"], "type": row["type"],
+                    "relation": row["relation_type"], "strength": row["strength"],
+                    "depth": depth,
+                })
+                if row["id"] not in visited:
+                    visited.add(row["id"])
+                    queue.append((row["id"], depth + 1))
+
+        conn.close()
+        return results
 
 
 # =============================================
@@ -614,6 +630,22 @@ class ProceduralMemory:
             "last_used_at": row["last_used_at"],
             "created_at": row["created_at"]
         }
+
+    def find_by_name_category(self, name: str, category: str) -> Optional[Dict[str, Any]]:
+        """Find procedure by exact name+category match for deduplication."""
+        conn = self.db._get_conn()
+        row = conn.execute(
+            """SELECT id, name, category, steps, success_count, fail_count
+               FROM procedures WHERE name = ? AND category = ?""",
+            (name, category)
+        ).fetchone()
+        conn.close()
+        if row:
+            return {
+                "id": row["id"], "name": row["name"], "category": row["category"],
+                "success_count": row["success_count"], "fail_count": row["fail_count"],
+            }
+        return None
 
 
 # =============================================

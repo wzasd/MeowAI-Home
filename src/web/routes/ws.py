@@ -141,9 +141,12 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
 
         await tm.update_thread(thread)
 
-        # Auto-record workflow pattern to procedural memory
+        # Auto-record workflow pattern to procedural memory (with dedup)
         if intent.workflow and memory_service and workflow_cat_ids:
-            memory_service.procedural.store_procedure(
+            from src.evolution.process_evolution import ProcessEvolution
+            pe = ProcessEvolution(memory_service.procedural)
+            success = len(workflow_cat_ids) == len(agents)
+            pe.store_or_update(
                 name=intent.workflow,
                 category="workflow",
                 steps=workflow_cat_ids,
@@ -152,7 +155,8 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
                     "total_nodes": len(agents),
                     "success": len(workflow_cat_ids),
                     "failed": max(0, len(agents) - len(workflow_cat_ids)),
-                }
+                },
+                success=success,
             )
 
         if intent.workflow:
