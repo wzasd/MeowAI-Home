@@ -159,12 +159,32 @@ class A2AController:
         if self.session_chain and new_session_id:
             self.session_chain.create(breed_id, thread.id, new_session_id)
 
-        return CatResponse(
+        response = CatResponse(
             cat_id=breed_id, cat_name=name,
             content=parsed.clean_content,
             targetCats=parsed.targetCats if parsed.targetCats else None,
             thinking="".join(thinking_parts) if thinking_parts else None,
         )
+
+        # Auto-store to episodic memory
+        if self.memory_service:
+            self.memory_service.store_episode(
+                thread_id=thread.id, role="user",
+                content=message, importance=3,
+            )
+            self.memory_service.store_episode(
+                thread_id=thread.id, role="assistant",
+                content=response.content, cat_id=breed_id,
+                importance=5,
+            )
+            if response.thinking:
+                self.memory_service.store_episode(
+                    thread_id=thread.id, role="thinking",
+                    content=response.thinking, cat_id=breed_id,
+                    importance=2,
+                )
+
+        return response
 
     def _build_context(self, message: str, thread: Thread, current_index: int) -> str:
         if current_index == 0:
