@@ -45,8 +45,11 @@ class ThreadManager:
 
     async def async_init(self):
         """异步初始化（用于测试或在异步上下文中）"""
+        if self._needs_async_init is False and hasattr(self, '_store_initialized'):
+            return  # Already initialized via async_init
         await self._init_db()
         self._needs_async_init = False
+        self._store_initialized = True
 
     async def _init_db(self):
         """初始化数据库"""

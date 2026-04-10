@@ -11,6 +11,7 @@ from src.models.types import AgentMessageType, InvocationOptions
 from src.memory.entity_extractor import extract_entities
 from src.governance.iron_laws import get_iron_laws_prompt
 from src.evolution.scope_guard import ScopeGuard
+from src.skills.chain import ChainTracker
 
 
 @dataclass
@@ -34,6 +35,7 @@ class A2AController:
         self.mcp_executor = MCPExecutor()
         self.skill_injector = SkillInjector()
         self.scope_guard = ScopeGuard(memory_service.episodic) if memory_service else None
+        self.chain_tracker = ChainTracker(max_depth=5)
 
         self.skill_router = None
         self.skill_loader = None

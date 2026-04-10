@@ -1,0 +1,17 @@
+name: review-pack
+display_name: "代码审查组"
+description: "双人代码审查流程，包含安全审查和性能审查"
+agents:
+  - cat_id: security-reviewer
+    breed: siamese
+    role: "安全审查员"
+    description: "审查代码安全性，识别潜在漏洞"
+  - cat_id: performance-reviewer
+    breed: maine_coon
+    role: "性能审查员"
+    description: "审查代码性能，优化瓶颈"
+skills:
+  - request-review
+  - receive-review
+  - quality-gate
+workflow: review

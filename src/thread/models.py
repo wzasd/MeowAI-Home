@@ -16,14 +16,24 @@ class Message:
     content: str
     cat_id: Optional[str] = None  # 如果是猫回复，记录是哪只
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    thinking: Optional[str] = None  # 思考过程（可选）
+    is_internal: bool = False  # 是否是 A2A 内部对话
+    parent_id: Optional[str] = None  # 关联的父消息ID（用于A2A链）
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "role": self.role,
             "content": self.content,
             "cat_id": self.cat_id,
             "timestamp": self.timestamp.isoformat()
         }
+        if self.thinking:
+            result["thinking"] = self.thinking
+        if self.is_internal:
+            result["is_internal"] = self.is_internal
+        if self.parent_id:
+            result["parent_id"] = self.parent_id
+        return result
 
     @classmethod
     def from_dict(cls, data: dict) -> "Message":
@@ -42,7 +52,10 @@ class Message:
             role=role,
             content=data["content"],
             cat_id=data.get("cat_id"),
-            timestamp=datetime.fromisoformat(data["timestamp"])
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            thinking=data.get("thinking"),
+            is_internal=data.get("is_internal", False),
+            parent_id=data.get("parent_id")
         )
 
 

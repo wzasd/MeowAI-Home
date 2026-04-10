@@ -15,6 +15,10 @@ data/*.db-journal
 # macOS
 .DS_Store
 
+# Web UI
+web/node_modules/
+web/dist/
+
 # Reference documentation (knowledge base)
 docs/*
 !docs/diary/

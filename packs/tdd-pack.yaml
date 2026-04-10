@@ -1,0 +1,22 @@
+name: tdd-pack
+display_name: "TDD 开发组"
+description: "测试驱动开发三人组，包含测试工程师、实现工程师和代码审查员"
+agents:
+  - cat_id: tester
+    breed: siamese
+    role: "测试工程师"
+    description: "专注于编写测试用例，确保代码质量"
+  - cat_id: implementer
+    breed: maine_coon
+    role: "实现工程师"
+    description: "实现功能代码，确保测试通过"
+  - cat_id: reviewer
+    breed: ragdoll
+    role: "代码审查员"
+    description: "审查代码质量，提出改进建议"
+skills:
+  - tdd
+  - debugging
+  - quality-gate
+  - request-review
+workflow: tdd
