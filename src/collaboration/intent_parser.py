@@ -7,7 +7,15 @@ PromptTagType = Literal["critique"]
 
 VALID_INTENTS = {"ideate", "execute"}
 VALID_PROMPT_TAGS = {"critique"}
-WORKFLOW_TAGS = {"brainstorm": "brainstorm", "parallel": "parallel", "autoplan": "auto_plan"}
+WORKFLOW_TAGS = {
+    "brainstorm": "brainstorm",
+    "parallel": "parallel",
+    "autoplan": "auto_plan",
+    # Phase 8.2: SOP 工作流
+    "tdd": "tdd",
+    "review": "review",
+    "deploy": "deploy",
+}
 TAG_PATTERN = re.compile(r"#(\w+)", re.IGNORECASE)
 
 

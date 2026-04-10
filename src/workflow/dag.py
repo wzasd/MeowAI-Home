@@ -1,6 +1,13 @@
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
+
+
+@dataclass
+class QualityGate:
+    """质量门禁条件"""
+    gate_type: str    # "test_pass" | "test_exists" | "no_blocking" | "always"
+    description: str  # 门禁描述
 
 
 @dataclass
@@ -10,6 +17,7 @@ class DAGNode:
     prompt_template: str
     role: str = ""
     is_aggregator: bool = False
+    gate: Optional[QualityGate] = None  # Phase 8.2: 前驱节点的门禁条件
 
 
 @dataclass
