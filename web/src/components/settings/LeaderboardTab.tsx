@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Trophy } from "lucide-react";
 import { useCatStore } from "../../stores/catStore";
 
@@ -11,13 +12,7 @@ interface LeaderboardEntry {
   badge?: "gold" | "silver" | "bronze";
 }
 
-const MOCK_LEADERBOARD: LeaderboardEntry[] = [
-  { catId: "orange", rank: 1, score: 96.4, totalInvocations: 142, successRate: 0.97, avgLatencyMs: 2300, badge: "gold" },
-  { catId: "tabby", rank: 2, score: 94.8, totalInvocations: 45, successRate: 0.98, avgLatencyMs: 1500, badge: "silver" },
-  { catId: "inky", rank: 3, score: 92.1, totalInvocations: 98, successRate: 0.95, avgLatencyMs: 1800, badge: "bronze" },
-  { catId: "siamese", rank: 4, score: 88.5, totalInvocations: 33, successRate: 0.94, avgLatencyMs: 2800 },
-  { catId: "patch", rank: 5, score: 85.3, totalInvocations: 67, successRate: 0.92, avgLatencyMs: 3100 },
-];
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const BADGE_COLORS = {
   gold: "text-amber-500",
@@ -27,6 +22,28 @@ const BADGE_COLORS = {
 
 export function LeaderboardTab() {
   const cats = useCatStore((s) => s.cats);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/metrics/leaderboard`);
+        if (res.ok) {
+          const data = await res.json();
+          setEntries(data);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeaderboard();
+  }, []);
+
+  if (loading) {
+    return <div className="p-4 text-gray-400">加载中...</div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -34,10 +51,9 @@ export function LeaderboardTab() {
         猫咪表现排行榜 — 综合评分基于成功率、响应速度和任务完成度。
       </p>
 
-      {/* Podium */}
       <div className="flex items-end justify-center gap-3 py-4">
         {[1, 0, 2].map((idx) => {
-          const entry = MOCK_LEADERBOARD[idx];
+          const entry = entries[idx];
           if (!entry) return null;
           const cat = cats.find((c) => c.id === entry.catId);
           const heights = ["h-24", "h-32", "h-20"];
@@ -56,7 +72,6 @@ export function LeaderboardTab() {
         })}
       </div>
 
-      {/* Full table */}
       <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
         <table className="w-full">
           <thead>
@@ -70,7 +85,7 @@ export function LeaderboardTab() {
             </tr>
           </thead>
           <tbody>
-            {MOCK_LEADERBOARD.map((entry) => {
+            {entries.map((entry) => {
               const cat = cats.find((c) => c.id === entry.catId);
               return (
                 <tr key={entry.catId} className="border-b border-gray-100 last:border-0 dark:border-gray-700/50">
@@ -81,23 +96,13 @@ export function LeaderboardTab() {
                       <span className="text-xs text-gray-500">#{entry.rank}</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-200">
-                    {cat?.displayName || entry.catId}
-                  </td>
-                  <td className="px-3 py-2 text-right text-sm font-bold text-gray-800 dark:text-gray-200">
-                    {entry.score.toFixed(1)}
-                  </td>
-                  <td className="px-3 py-2 text-right text-xs text-gray-600 dark:text-gray-400">
-                    {entry.totalInvocations}
-                  </td>
+                  <td className="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-200">{cat?.displayName || entry.catId}</td>
+                  <td className="px-3 py-2 text-right text-sm font-bold text-gray-800 dark:text-gray-200">{entry.score.toFixed(1)}</td>
+                  <td className="px-3 py-2 text-right text-xs text-gray-600 dark:text-gray-400">{entry.totalInvocations}</td>
                   <td className="px-3 py-2 text-right text-xs">
-                    <span className={entry.successRate > 0.95 ? "text-green-600" : "text-amber-600"}>
-                      {(entry.successRate * 100).toFixed(0)}%
-                    </span>
+                    <span className={entry.successRate > 0.95 ? "text-green-600" : "text-amber-600"}>{(entry.successRate * 100).toFixed(0)}%</span>
                   </td>
-                  <td className="px-3 py-2 text-right text-xs text-gray-600 dark:text-gray-400">
-                    {entry.avgLatencyMs}ms
-                  </td>
+                  <td className="px-3 py-2 text-right text-xs text-gray-600 dark:text-gray-400">{entry.avgLatencyMs}ms</td>
                 </tr>
               );
             })}
