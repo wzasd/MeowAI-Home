@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Settings, Link, Variable, Palette, Cat, Shield, BarChart3, Zap, Trophy } from "lucide-react";
+import { X, Settings, Link, Variable, Palette, Cat, Shield, BarChart3, Zap, Trophy, Scale } from "lucide-react";
 import { ConnectorSettings } from "./ConnectorSettings";
 import { EnvVarSettings } from "./EnvVarSettings";
 import { CatSettings } from "./CatSettings";
@@ -8,8 +8,9 @@ import { CapabilitySettings } from "./CapabilitySettings";
 import { QuotaBoard } from "./QuotaBoard";
 import { LeaderboardTab } from "./LeaderboardTab";
 import { PermissionsSettings } from "./PermissionsSettings";
+import { GovernanceSettings } from "./GovernanceSettings";
 
-type SettingsTab = "connectors" | "env" | "cats" | "appearance" | "capabilities" | "quota" | "leaderboard" | "permissions";
+type SettingsTab = "connectors" | "env" | "cats" | "appearance" | "capabilities" | "quota" | "leaderboard" | "permissions" | "governance";
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     { id: "cats" as const, label: "猫咪管理", icon: Cat },
     { id: "capabilities" as const, label: "能力配置", icon: Zap },
     { id: "permissions" as const, label: "权限", icon: Shield },
+    { id: "governance" as const, label: "治理", icon: Scale },
     { id: "quota" as const, label: "配额看板", icon: BarChart3 },
     { id: "leaderboard" as const, label: "排行榜", icon: Trophy },
     { id: "connectors" as const, label: "连接器", icon: Link },
@@ -78,6 +80,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             {activeTab === "cats" && <CatSettings />}
             {activeTab === "capabilities" && <CapabilitySettings />}
             {activeTab === "permissions" && <PermissionsSettings />}
+            {activeTab === "governance" && <GovernanceSettings />}
             {activeTab === "quota" && <QuotaBoard />}
             {activeTab === "leaderboard" && <LeaderboardTab />}
             {activeTab === "connectors" && <ConnectorSettings />}
