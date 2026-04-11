@@ -13,40 +13,15 @@ import {
   BarChart3,
   Target,
   AlertCircle,
+  Loader2,
+  X,
 } from "lucide-react";
-
-// === Types ===
-
-type TaskStatus = "backlog" | "todo" | "doing" | "blocked" | "done";
-type Priority = "P0" | "P1" | "P2" | "P3";
-
-interface MissionTask {
-  id: string;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  priority: Priority;
-  ownerCat?: string;
-  tags: string[];
-  createdAt: string;
-  dueDate?: string;
-  progress?: number;
-}
-
-// === Mock Data ===
-
-const MOCK_TASKS: MissionTask[] = [
-  { id: "m1", title: "实现消息编辑功能", description: "支持用户编辑已发送的消息", status: "doing", priority: "P0", ownerCat: "orange", tags: ["聊天", "核心"], createdAt: "2026-04-10", progress: 60 },
-  { id: "m2", title: "添加 Signal 收件箱页面", description: "展示聚合文章，支持学习模式", status: "done", priority: "P1", ownerCat: "patch", tags: ["Signal"], createdAt: "2026-04-09", progress: 100 },
-  { id: "m3", title: "富文本块组件", description: "Card, Diff, Checklist, Media blocks", status: "done", priority: "P1", ownerCat: "inky", tags: ["UI", "聊天"], createdAt: "2026-04-09", progress: 100 },
-  { id: "m4", title: "右侧面板开发", description: "Token统计、Session链、任务面板、队列管理", status: "doing", priority: "P0", ownerCat: "inky", tags: ["UI", "面板"], createdAt: "2026-04-10", progress: 40 },
-  { id: "m5", title: "Workspace IDE 面板", description: "文件树 + 代码查看器 + 终端", status: "backlog", priority: "P2", tags: ["Workspace", "IDE"], createdAt: "2026-04-11" },
-  { id: "m6", title: "Split Pane 多线程视图", description: "2x2 分屏同时查看多个线程", status: "backlog", priority: "P2", tags: ["聊天", "UI"], createdAt: "2026-04-11" },
-  { id: "m7", title: "语音输入输出", description: "Whisper API 集成 + TTS 流式播放", status: "backlog", priority: "P3", tags: ["语音"], createdAt: "2026-04-11" },
-  { id: "m8", title: "消息分支功能", description: "从任意消息分支出新线程", status: "todo", priority: "P1", ownerCat: "orange", tags: ["聊天", "线程"], createdAt: "2026-04-10" },
-  { id: "m9", title: "历史搜索模态框", description: "全文搜索历史对话", status: "todo", priority: "P1", tags: ["搜索"], createdAt: "2026-04-10" },
-  { id: "m10", title: "依赖图可视化", description: "DAGre + React Flow 任务依赖关系图", status: "blocked", priority: "P2", tags: ["Mission", "图表"], createdAt: "2026-04-10", dueDate: "2026-04-15" },
-];
+import {
+  useMissions,
+  type MissionTask,
+  type TaskStatus,
+  type Priority,
+} from "../../hooks/useMissions";
 
 const PRIORITY_COLORS: Record<Priority, string> = {
   P0: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -63,12 +38,16 @@ const STATUS_CONFIG: Record<TaskStatus, { icon: typeof Circle; color: string; la
   done: { icon: CheckCircle2, color: "text-green-500", label: "已完成" },
 };
 
-// === Sub-components ===
-
-function TaskCard({ task }: { task: MissionTask }) {
+function TaskCard({
+  task,
+  onStatusChange,
+}: {
+  task: MissionTask;
+  onStatusChange?: (id: string, status: TaskStatus) => void;
+}) {
   const cfg = STATUS_CONFIG[task.status];
   const StatusIcon = cfg.icon;
-  void StatusIcon; // suppress unused variable warning
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
       <div className="flex items-start justify-between gap-2">
@@ -99,12 +78,29 @@ function TaskCard({ task }: { task: MissionTask }) {
             <AlertCircle size={10} /> {task.dueDate.slice(5)}
           </span>
         )}
+        {onStatusChange && task.status !== "done" && (
+          <button
+            onClick={() => onStatusChange(task.id, task.status === "doing" ? "done" : "doing")}
+            className="ml-auto rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-green-500 dark:hover:bg-gray-700"
+            title={task.status === "doing" ? "标记完成" : "开始处理"}
+          >
+            <StatusIcon size={12} className={cfg.color} />
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function KanbanColumn({ status, tasks }: { status: TaskStatus; tasks: MissionTask[] }) {
+function KanbanColumn({
+  status,
+  tasks,
+  onStatusChange,
+}: {
+  status: TaskStatus;
+  tasks: MissionTask[];
+  onStatusChange?: (id: string, status: TaskStatus) => void;
+}) {
   const cfg = STATUS_CONFIG[status];
   const StatusIcon = cfg.icon;
   return (
@@ -116,7 +112,7 @@ function KanbanColumn({ status, tasks }: { status: TaskStatus; tasks: MissionTas
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto">
         {tasks.map((task) => (
-          <TaskCard key={task.id} task={task} />
+          <TaskCard key={task.id} task={task} onStatusChange={onStatusChange} />
         ))}
         {tasks.length === 0 && (
           <div className="rounded-lg border-2 border-dashed border-gray-200 p-4 text-center text-xs text-gray-400 dark:border-gray-700">
@@ -128,9 +124,28 @@ function KanbanColumn({ status, tasks }: { status: TaskStatus; tasks: MissionTas
   );
 }
 
-function StatsBar({ tasks }: { tasks: MissionTask[] }) {
-  const done = tasks.filter((t) => t.status === "done").length;
-  const total = tasks.length;
+function StatsBar({
+  tasks,
+  loading,
+  stats,
+}: {
+  tasks: MissionTask[];
+  loading: boolean;
+  stats: { total: number; done: number; doing: number; blocked: number } | null;
+}) {
+  const done = stats?.done ?? tasks.filter((t) => t.status === "done").length;
+  const total = stats?.total ?? tasks.length;
+  const doing = stats?.doing ?? tasks.filter((t) => t.status === "doing").length;
+  const blocked = stats?.blocked ?? tasks.filter((t) => t.status === "blocked").length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-4">
+        <Loader2 size={14} className="animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-4">
       <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
@@ -140,29 +155,159 @@ function StatsBar({ tasks }: { tasks: MissionTask[] }) {
         <CheckCircle2 size={14} /> {done} 完成
       </div>
       <div className="flex items-center gap-1 text-xs text-amber-600">
-        <Clock size={14} /> {tasks.filter((t) => t.status === "doing").length} 进行中
+        <Clock size={14} /> {doing} 进行中
       </div>
       <div className="flex items-center gap-1 text-xs text-red-600">
-        <AlertTriangle size={14} /> {tasks.filter((t) => t.status === "blocked").length} 阻塞
+        <AlertTriangle size={14} /> {blocked} 阻塞
       </div>
       <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-        <div className="h-full rounded-full bg-green-500" style={{ width: `${(done / total) * 100}%` }} />
+        <div className="h-full rounded-full bg-green-500" style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }} />
       </div>
     </div>
   );
 }
 
-// === Main Component ===
+function CreateTaskModal({
+  isOpen,
+  onClose,
+  onCreate,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreate: (task: Omit<MissionTask, "id" | "createdAt">) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<Priority>("P2");
+  const [status, setStatus] = useState<TaskStatus>("backlog");
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    onCreate({
+      title: title.trim(),
+      description: description.trim(),
+      priority,
+      status,
+      tags: [],
+    });
+    setTitle("");
+    setDescription("");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">新建任务</h3>
+          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">标题</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              placeholder="输入任务标题..."
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">描述</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              rows={3}
+              placeholder="输入任务描述..."
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">优先级</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as Priority)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="P0">P0 - 最高</option>
+                <option value="P1">P1 - 高</option>
+                <option value="P2">P2 - 中</option>
+                <option value="P3">P3 - 低</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">状态</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="backlog">待办池</option>
+                <option value="todo">待开始</option>
+                <option value="doing">进行中</option>
+                <option value="blocked">阻塞</option>
+                <option value="done">已完成</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={!title.trim()}
+              className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              创建
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export function MissionHubPage() {
-  const [tasks] = useState<MissionTask[]>(MOCK_TASKS);
+  const {
+    tasks,
+    loading,
+    error,
+    filterPriority,
+    setFilterPriority,
+    fetchTasks,
+    createTask,
+    updateTaskStatus,
+    stats,
+  } = useMissions();
+
   const [view, setView] = useState<"kanban" | "list">("kanban");
-  const [filterPriority, setFilterPriority] = useState<Priority | "all">("all");
   const [tab, setTab] = useState<"board" | "features" | "risks">("board");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const filtered = filterPriority === "all" ? tasks : tasks.filter((t) => t.priority === filterPriority);
 
   const columns: TaskStatus[] = ["backlog", "todo", "doing", "blocked", "done"];
+
+  const handleCreateTask = async (taskData: Omit<MissionTask, "id" | "createdAt">) => {
+    await createTask(taskData);
+  };
+
+  const handleStatusChange = async (taskId: string, status: TaskStatus) => {
+    await updateTaskStatus(taskId, status);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -171,7 +316,10 @@ export function MissionHubPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Mission Hub</h2>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700">
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
+            >
               <Plus size={12} /> 新任务
             </button>
             <div className="flex rounded border border-gray-200 dark:border-gray-700">
@@ -205,7 +353,7 @@ export function MissionHubPage() {
               </button>
             ))}
           </div>
-          <StatsBar tasks={tasks} />
+          <StatsBar tasks={tasks} loading={loading} stats={stats} />
         </div>
 
         {/* Priority filter */}
@@ -227,37 +375,59 @@ export function MissionHubPage() {
         </div>
       </div>
 
+      {/* Error message */}
+      {error && (
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          <AlertCircle size={14} />
+          {error}
+          <button onClick={fetchTasks} className="ml-auto text-blue-600 hover:underline">
+            重试
+          </button>
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex-1 overflow-x-auto p-4">
-        {tab === "board" && view === "kanban" && (
+        {loading && tasks.length === 0 ? (
+          <div className="flex h-full items-center justify-center">
+            <Loader2 size={32} className="animate-spin text-gray-400" />
+          </div>
+        ) : tab === "board" && view === "kanban" ? (
           <div className="flex gap-4" style={{ minWidth: columns.length * 280 }}>
             {columns.map((status) => (
-              <KanbanColumn key={status} status={status} tasks={filtered.filter((t) => t.status === status)} />
+              <KanbanColumn
+                key={status}
+                status={status}
+                tasks={filtered.filter((t) => t.status === status)}
+                onStatusChange={handleStatusChange}
+              />
             ))}
           </div>
-        )}
-        {tab === "board" && view === "list" && (
+        ) : tab === "board" && view === "list" ? (
           <div className="space-y-2">
-            {filtered.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-              >
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200">{task.title}</h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{task.description}</p>
+            {filtered.map((task) => {
+              const cfg = STATUS_CONFIG[task.status];
+              const CfgIcon = cfg.icon;
+              return (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200">{task.title}</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{task.description}</p>
+                  </div>
+                  <span className="flex items-center gap-0.5 text-xs">
+                    <CfgIcon size={12} className={cfg.color} />
+                    <span className="text-gray-500 dark:text-gray-400">{cfg.label}</span>
+                  </span>
+                  {task.ownerCat && <span className="text-xs text-purple-600 dark:text-purple-400">@{task.ownerCat}</span>}
                 </div>
-                <span className="flex items-center gap-0.5 text-xs">
-                  {(() => { const cfg = STATUS_CONFIG[task.status]; const CfgIcon = cfg.icon; return <CfgIcon size={12} className={cfg.color} />; })()}
-                  <span className="text-gray-500 dark:text-gray-400">{STATUS_CONFIG[task.status].label}</span>
-                </span>
-                {task.ownerCat && <span className="text-xs text-purple-600 dark:text-purple-400">@{task.ownerCat}</span>}
-              </div>
-            ))}
+              );
+            })}
           </div>
-        )}
-        {tab === "features" && (
+        ) : tab === "features" ? (
           <div className="flex h-full items-center justify-center text-gray-400">
             <div className="text-center">
               <BarChart3 size={32} className="mx-auto mb-2" />
@@ -265,8 +435,7 @@ export function MissionHubPage() {
               <p className="text-sm">按功能模块追踪整体完成度</p>
             </div>
           </div>
-        )}
-        {tab === "risks" && (
+        ) : (
           <div className="flex h-full items-center justify-center text-gray-400">
             <div className="text-center">
               <AlertTriangle size={32} className="mx-auto mb-2" />
@@ -276,6 +445,13 @@ export function MissionHubPage() {
           </div>
         )}
       </div>
+
+      {/* Create Task Modal */}
+      <CreateTaskModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreate={handleCreateTask}
+      />
     </div>
   );
 }

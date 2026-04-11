@@ -21,6 +21,7 @@ from src.web.routes.monitoring import router as monitoring_router
 from src.web.routes.queue import router as queue_router
 from src.web.routes.metrics import router as metrics_router
 from src.web.routes.tasks import router as tasks_router
+from src.web.routes.missions import router as missions_router
 from src.web.routes.audit import router as audit_router
 from src.web.routes.signals import router as signals_router
 
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(queue_router, prefix="/api")
     app.include_router(metrics_router)
     app.include_router(tasks_router, prefix="/api")
+    app.include_router(missions_router, prefix="/api")
     app.include_router(audit_router)
     app.include_router(signals_router, prefix="/api")
 
