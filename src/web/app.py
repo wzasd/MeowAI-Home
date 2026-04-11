@@ -23,6 +23,7 @@ from src.web.routes.metrics import router as metrics_router
 from src.web.routes.tasks import router as tasks_router
 from src.web.routes.missions import router as missions_router
 from src.web.routes.connectors_messages import router as connectors_messages_router
+from src.web.routes.evidence import router as evidence_router
 from src.web.routes.audit import router as audit_router
 from src.web.routes.signals import router as signals_router
 
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks_router, prefix="/api")
     app.include_router(missions_router, prefix="/api")
     app.include_router(connectors_messages_router, prefix="/api")
+    app.include_router(evidence_router, prefix="/api")
     app.include_router(audit_router)
     app.include_router(signals_router, prefix="/api")
 
