@@ -132,27 +132,33 @@ React + FastAPI 构建，支持实时协作：
 
 ## 快速开始
 
-### Docker（推荐）
+### Homebrew（推荐）
 
 ```bash
-docker run -p 8000:8000 -p 5173:5173 meowai/meowai-home:latest
+brew tap wzasd/meowai https://github.com/wzasd/MeowAI-Home
+brew install meowai
+meowai start
 ```
 
 打开 http://localhost:5173
 
-### 源码
+### 源码安装
 
 ```bash
 git clone https://github.com/wzasd/MeowAI-Home.git
 cd MeowAI-Home
-pip install -e ".[dev]"
-python3 -m uvicorn src.web.app:create_app --factory --port 8000
+bash scripts/install.sh
+meowai start
 ```
 
-### 完整栈（含监控）
+### 常用命令
 
 ```bash
-docker-compose up -d
+meowai start          # 启动 API + Web UI
+meowai dev            # 开发模式（热重载）
+meowai check          # 环境检查
+meowai chat           # CLI 对话模式
+meowai chat --cat @sonnet  # 指定 Agent
 ```
 
 启动后可用服务：
@@ -161,8 +167,6 @@ docker-compose up -d
 |------|------|------|
 | Web UI | http://localhost:5173 | 前端界面 |
 | API | http://localhost:8000 | 后端接口 |
-| Prometheus | http://localhost:9090 | 指标采集 |
-| Grafana | http://localhost:3000 | 监控面板 |
 
 ---
 
@@ -260,9 +264,8 @@ MeowAI-Home/
 ├── web/                    # React 前端
 ├── docs/                   # 文档与开发日记
 ├── ops/                    # Prometheus/Grafana 配置
-├── scripts/                # 工具脚本
-├── Dockerfile              # 生产构建
-└── docker-compose.yml      # 完整部署栈
+├── scripts/                # 工具脚本 (install.sh)
+├── Formula/                # Homebrew Formula
 ```
 
 ---

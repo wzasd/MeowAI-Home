@@ -4,15 +4,14 @@ from src.models.registry_init import initialize_registries
 
 def test_initialize_with_real_config():
     cat_reg, agent_reg = initialize_registries("cat-config.json")
-    assert cat_reg.has("opus")
-    assert cat_reg.has("sonnet")
-    assert cat_reg.has("codex")
-    assert cat_reg.has("gemini")
-    assert agent_reg.has("opus")
+    # 用户的猫配置: 阿橘(orange), 墨点(inky), 花花(patch)
+    assert cat_reg.has("orange")
+    assert cat_reg.has("inky")
+    assert cat_reg.has("patch")
+    assert agent_reg.has("orange")
     from src.providers.claude_provider import ClaudeProvider
-    assert isinstance(agent_reg.get("opus"), ClaudeProvider)
-    from src.providers.codex_provider import CodexProvider
-    assert isinstance(agent_reg.get("codex"), CodexProvider)
+    assert isinstance(agent_reg.get("orange"), ClaudeProvider)
+    assert isinstance(agent_reg.get("inky"), ClaudeProvider)
 
 
 def test_initialize_default_cat():

@@ -1,6 +1,15 @@
 /** REST API client for MeowAI Home backend. */
 
-import type { ThreadDetailResponse, ThreadListResponse, MessageListResponse } from "../types";
+import type {
+  ThreadDetailResponse,
+  ThreadListResponse,
+  MessageListResponse,
+  MessageResponse,
+  CatListResponse,
+  CatDetailResponse,
+  ConnectorListResponse,
+  EnvVarListResponse,
+} from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -34,12 +43,28 @@ export const api = {
         body: JSON.stringify({ name }),
       }),
 
+    switchCat: (id: string, catId: string) =>
+      request<ThreadDetailResponse>(`/api/threads/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ current_cat_id: catId }),
+      }),
+
     delete: (id: string) => request<{ status: string }>(`/api/threads/${id}`, { method: "DELETE" }),
 
     archive: (id: string) =>
       request<ThreadDetailResponse>(`/api/threads/${id}/archive`, {
         method: "POST",
       }),
+
+    sessions: (id: string) =>
+      request<Array<{
+        session_id: string;
+        cat_id: string;
+        cat_name: string;
+        status: "active" | "sealing" | "sealed";
+        created_at: number;
+        seal_started_at?: number;
+      }>>(`/api/threads/${id}/sessions`),
   },
 
   messages: {
@@ -47,5 +72,90 @@ export const api = {
       request<MessageListResponse>(
         `/api/threads/${threadId}/messages?limit=${limit}&offset=${offset}`
       ),
+
+    edit: (threadId: string, messageId: string, content: string) =>
+      request<MessageResponse>(`/api/threads/${threadId}/messages/${messageId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content }),
+      }),
+
+    delete: (threadId: string, messageId: string) =>
+      request<{ success: boolean }>(`/api/threads/${threadId}/messages/${messageId}`, {
+        method: "DELETE",
+      }),
+
+    reply: (threadId: string, content: string, replyToId: string) =>
+      request<MessageResponse>(`/api/threads/${threadId}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ content, reply_to: replyToId }),
+      }),
+
+    branch: (threadId: string, messageId: string) =>
+      request<{ thread_id: string }>(`/api/threads/${threadId}/messages/${messageId}/branch`, {
+        method: "POST",
+      }),
+
+    search: (query: string, limit = 20) =>
+      request<{ results: Array<{ threadId: string; messageId: string; content: string; timestamp: string }> }>(
+        `/api/messages/search?q=${encodeURIComponent(query)}&limit=${limit}`
+      ),
+  },
+
+  cats: {
+    list: () => request<CatListResponse>("/api/cats"),
+    get: (id: string) => request<CatDetailResponse>(`/api/cats/${id}`),
+    invoke: (id: string) =>
+      request<{ success: boolean; message: string }>(`/api/cats/${id}/invoke`, {
+        method: "POST",
+      }),
+    getBudget: (id: string) =>
+      request<{ catId: string; budget: Record<string, number> }>(`/api/cats/${id}/budget`),
+    create: (data: {
+      id: string;
+      name: string;
+      displayName?: string;
+      provider: string;
+      defaultModel?: string;
+      personality?: string;
+      mentionPatterns?: string[];
+    }) =>
+      request<CatDetailResponse>("/api/cats", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: {
+      name?: string;
+      displayName?: string;
+      provider?: string;
+      defaultModel?: string;
+      personality?: string;
+      mentionPatterns?: string[];
+    }) =>
+      request<CatDetailResponse>(`/api/cats/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<{ success: boolean; deleted: string }>(`/api/cats/${id}`, {
+        method: "DELETE",
+      }),
+  },
+
+  connectors: {
+    list: () => request<ConnectorListResponse>("/api/connectors"),
+    test: (name: string, config: Record<string, string>) =>
+      request<{ success: boolean; message: string }>(`/api/connectors/${name}/test`, {
+        method: "POST",
+        body: JSON.stringify({ config }),
+      }),
+  },
+
+  config: {
+    listEnvVars: () => request<EnvVarListResponse>("/api/config/env"),
+    updateEnvVar: (name: string, value: string) =>
+      request<{ success: boolean }>(`/api/config/env/${name}`, {
+        method: "POST",
+        body: JSON.stringify({ value }),
+      }),
   },
 };

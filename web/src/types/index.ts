@@ -28,6 +28,11 @@ export interface MessageResponse {
   thinking?: string;
   is_internal?: boolean;
   parent_id?: string;
+  id: string;
+  metadata?: Record<string, unknown>;
+  is_deleted?: boolean;
+  is_edited?: boolean;
+  reply_to?: string;
 }
 
 export interface ThreadListResponse {
@@ -46,11 +51,67 @@ export interface StreamingCatResponse {
   targetCats: string[] | null;
 }
 
+export interface CatResponse {
+  id: string;
+  name: string;
+  displayName?: string;
+  provider: string;
+  avatar?: string;
+  colorPrimary?: string;
+  colorSecondary?: string;
+  mentionPatterns?: string[];
+  isAvailable: boolean;
+  roles?: string[];
+  evaluation?: string;
+}
+
+export interface CatListResponse {
+  cats: CatResponse[];
+  defaultCat: string | null;
+}
+
+export interface CatDetailResponse extends CatResponse {
+  defaultModel?: string;
+  personality?: string;
+  cliCommand?: string;
+  cliArgs?: string[];
+}
+
 export const CAT_INFO: Record<string, { name: string; emoji: string; color: string }> = {
   orange: { name: "阿橘", emoji: "🐱", color: "orange" },
   inky: { name: "墨点", emoji: "🐾", color: "purple" },
   patch: { name: "花花", emoji: "🌸", color: "pink" },
 };
+
+export interface ConnectorResponse {
+  name: string;
+  displayName: string;
+  enabled: boolean;
+  status: string;
+  features: string[];
+  configFields: string[];
+}
+
+export interface ConnectorListResponse {
+  connectors: ConnectorResponse[];
+}
+
+export interface EnvVarResponse {
+  name: string;
+  category: string;
+  description: string;
+  default: string | null;
+  current: string;
+  isSet: boolean;
+  required: boolean;
+  sensitive: boolean;
+  allowedValues: string[] | null;
+}
+
+export interface EnvVarListResponse {
+  variables: EnvVarResponse[];
+  categories: string[];
+}
 
 /** Format timestamp to readable time */
 export function formatTime(timestamp: string): string {

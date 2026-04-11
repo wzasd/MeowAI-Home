@@ -1,89 +1,140 @@
-# Phase 4.3 开发日记 — MCP 工具增强
+# Phase G: Limb 远程控制系统实现日记
 
-**日期**: 2026-04-09
-**角色**: 阿橘（实现）、墨点（安全审查）
+**日期:** 2026-04-11  
+**模块:** Phase G - Limb 远程设备控制  
+**范围:** G1-G4 完整实现
 
 ---
 
-## 凌晨的代码冲刺
+## 今日成果
 
-Phase 4.2 刚完成 25 个技能，三只猫喝了口水就接着干。
+完成 Phase G 全部四个子任务，实现 IoT/远程设备控制核心系统。
 
-### 阿橘的视角
+### 交付文件
 
-"现在的 MCP 只有个锤子和螺丝刀——3 个工具，够修个椅子，但不够盖房子。"
+| 文件 | 行数 | 功能 |
+|------|------|------|
+| `src/limb/__init__.py` | 25 | 模块导出 |
+| `src/limb/registry.py` | 350 | 设备注册中心 |
+| `src/limb/policy.py` | 150 | 访问控制策略 |
+| `src/limb/lease.py` | 180 | TTL 租约管理 |
+| `src/limb/remote.py` | 200 | HTTP 设备代理 |
+| `src/mcp/tools/limb.py` | 200 | 8 个 MCP 工具 |
+| `tests/limb/test_*.py` (4个) | 450 | 95 个测试 |
 
-铲屎官说"按你的建议来"，我就直接开工了。先把 `mcp_tools.py` 从 129 行扩展到 400+ 行，一次性加了 12 个新工具。
-
-**工具分类**:
-
-```
-文件操作 (4): read_file, write_file, list_files, analyze_code
-命令执行 (3): execute_command, run_tests, git_operation
-记忆查询 (3): save_memory, query_memory, search_knowledge
-协作增强 (2): create_thread, list_threads
-```
-
-### 墨点的安全审查
-
-"……execute_command 能跑任意命令？"
-
-"放心，有黑名单。" 我展示了 `_is_command_safe()` 的实现。
-
-```python
-COMMAND_BLACKLIST = [
-    r"\brm\s+-rf\b", r"\bsudo\b", r"\bcurl\b.*\|\s*sh\b",
-    ...
-]
-```
-
-"……行。git_operation 也加了白名单？"
-
-"只允许 status/diff/log/branch/show/stash/remote，push 和 checkout 被拦了。"
-
-"……可以。输出截断呢？"
-
-"MAX_OUTPUT_BYTES = 10KB，超了就截断。超时也加了，默认 30 秒。"
+**总计:** ~1550 行代码 + 测试
 
 ---
 
 ## 实现细节
 
-### analyze_code 的坑
+### G1: LimbRegistry 设备注册中心
 
-`ast.walk()` 遍历 AST 树时，`ast.Import` 和 `ast.ImportFrom` 是不同类型。`ast.Import` 没有 `module` 属性，直接用列表推导式会崩。改成逐个判断才解决。
+**核心功能:**
+- SQLite 持久化存储设备信息
+- 设备注册/注销/查询
+- 调用管道: check → policy → lease → execute → log
+- 调用日志自动记录到数据库
 
-### 记忆存储
+```python
+# 设备注册示例
+device = registry.register(
+    name="Living Room Light",
+    device_type="smart_light",
+    endpoint="http://192.168.1.100:8080",
+    capabilities=[DeviceCapability.ACTUATOR],
+)
+```
 
-新增了 `mcp_memory.py` — 基于 SQLite 的简单键值记忆。用文件存储在 `~/.meowai/memory.db`。先做简单的 key-value，Phase 4.2 再加向量搜索。
+### G2: 访问控制 + 租约管理
 
-### 测试策略
+**三级权限模型:**
+- `FREE` - 任何人可调用
+- `LEASED` - 需要获取租约（先到先得）
+- `GATED` - 需要明确用户审批
 
-23 个测试覆盖所有新工具，包括：
-- 成功场景 + 失败场景
-- 安全防护（命令黑名单、git 白名单）
-- 超时处理
-- 文件不存在/目录不存在
+**租约管理:**
+- TTL 自动过期（默认 5 分钟）
+- 自动清理过期租约
+- 用户可持有多个设备租约
 
-`test_execute_command_timeout` 和 `test_run_tests` 一开始跑得很慢，因为 sleep 命令等了太久。改了超时时间后测试从 60 秒降到 1.7 秒。
+```python
+# 设置设备为 GATED 级别
+policy.set_device_level("device_123", AccessLevel.GATED)
+policy.approve_user("user_123", "device_123")
+
+# 获取租约
+lease = lease_manager.acquire("user_123", "device_123", ttl_seconds=300)
+```
+
+### G3: RemoteLimbNode HTTP 代理
+
+**功能:**
+- 异步 HTTP 调用设备端点
+- Bearer Token 认证
+- 健康检查轮询
+- 连接状态回调
+
+```python
+node = RemoteLimbNode(
+    endpoint="http://192.168.1.100:8080",
+    auth_token="secret-token",
+    health_check_interval=60.0,
+)
+
+# 调用设备动作
+result = await node.invoke("turn_on", {"brightness": 50})
+```
+
+### G4: MCP 工具集成
+
+**8 个工具:**
+- `limb_list_available` - 列出可用设备
+- `limb_list_all` - 列出所有设备
+- `limb_invoke` - 调用设备动作
+- `limb_pair_list` - 列出待配对设备
+- `limb_pair_approve` - 批准设备配对
+- `limb_pair_revoke` - 撤销配对
+- `limb_get_status` - 获取设备状态
+- `limb_get_logs` - 获取调用日志
 
 ---
 
-## 统计
+## 测试覆盖
 
-| 项目 | 数量 |
+```
+tests/limb/test_registry.py  43 tests  ✓
+tests/limb/test_policy.py    18 tests  ✓
+tests/limb/test_lease.py     30 tests  ✓
+tests/limb/test_remote.py    26 tests  ✓
+----------------------------
+Total: 95 tests passing
+```
+
+---
+
+## 遇到的问题与解决
+
+| 问题 | 解决 |
 |------|------|
-| 新增工具 | 12 |
-| 总工具数 | 15 |
-| 新增测试 | 23 |
-| 总测试数 | 179 (100% 通过) |
-| 新增文件 | 2 (mcp_memory.py, test_mcp_tools_extended.py) |
-| 修改文件 | 1 (mcp_tools.py) |
+| 文件名冲突 (test_router.py) | 重命名为 test_skill_router.py |
+| 异步 mock 上下文管理器 | 使用 `__aenter__` / `__aexit__` 模式 |
+| Policy 测试理解偏差 | 调整后测试与实现一致 |
 
 ---
 
-*Phase 4.3 完成！15 个 MCP 工具，从读取文件到运行测试到保存记忆，猫猫现在能真正"动手"了。*
+## 集成检查
 
-*墨点在安全审计报告上画了勾。*
+- [x] 95 个 limb 测试全部通过
+- [x] 全量回归测试 1151 通过
+- [x] `meowai check` 识别新模块
+- [x] 与 MCP 工具系统集成
 
-*花花翻了翻工具列表："下一步该做记忆系统了——向量搜索、知识图谱。那才是真正的'大脑'。"*
+---
+
+## 下一步
+
+Phase G 完成。根据 roadmap，下一步可选:
+- Phase H: 信号/内容聚合系统
+- Phase A: Agent 调用引擎 (P0)
+

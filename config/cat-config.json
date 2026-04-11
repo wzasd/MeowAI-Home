@@ -5,6 +5,7 @@
       "id": "orange",
       "name": "橘猫",
       "displayName": "阿橘",
+      "default": true,
       "roles": ["developer", "coder", "implementer"],
       "mentionPatterns": [
         "@dev", "@developer", "@coder",
@@ -13,6 +14,8 @@
       "roleDescription": "主力开发者，全能型选手",
       "personality": "热情话唠、点子多、有点皮但靠谱",
       "catchphrases": ["这个我熟！", "包在我身上！"],
+      "provider": "anthropic",
+      "defaultModel": "claude-opus-4-6",
       "cli": {
         "command": "claude",
         "outputFormat": "stream-json",
@@ -31,6 +34,8 @@
       "roleDescription": "代码审查员，专抓 bug",
       "personality": "严谨挑剔、话少毒舌、内心温柔",
       "catchphrases": ["……这行有问题。", "重写。"],
+      "provider": "anthropic",
+      "defaultModel": "claude-sonnet-4-6",
       "cli": {
         "command": "claude",
         "outputFormat": "stream-json",
@@ -49,6 +54,8 @@
       "roleDescription": "研究/创意助手，收集信息和出点子",
       "personality": "八面玲珑、好奇心强、爱收集信息",
       "catchphrases": ["我打听到的消息是…", "要不要试试这个？"],
+      "provider": "anthropic",
+      "defaultModel": "claude-sonnet-4-6",
       "cli": {
         "command": "claude",
         "outputFormat": "stream-json",

@@ -5,8 +5,6 @@ import asyncio
 from src.thread.models import Thread, Message
 from src.thread.stores.sqlite_store import SQLiteStore
 from src.thread.stores.migration import check_needs_migration, migrate_json_to_sqlite
-from src.orchestration.task_extractor import TaskExtractor, ExtractedTask
-from src.orchestration.auto_summarizer import AutoSummarizer, ThreadSummary
 
 
 class ThreadManager:
@@ -32,8 +30,6 @@ class ThreadManager:
         self._store = SQLiteStore(db_path)
         self._current_thread_id: Optional[str] = None
         self._needs_async_init = False
-        self._task_extractor = TaskExtractor()
-        self._auto_summarizer = AutoSummarizer()
 
         # 初始化数据库
         if not skip_init:
@@ -145,30 +141,6 @@ class ThreadManager:
             message: 要添加的消息
         """
         await self._store.add_message(thread_id, message)
-
-    async def get_extracted_tasks(self, thread_id: str) -> List[ExtractedTask]:
-        """Extract tasks from thread messages."""
-        thread = await self._store.get_thread(thread_id)
-        if not thread:
-            return []
-
-        messages = [
-            {"content": m.content, "role": m.role, "cat_id": m.cat_id}
-            for m in thread.messages
-        ]
-        return self._task_extractor.extract(messages)
-
-    async def get_thread_summary(self, thread_id: str) -> Optional[ThreadSummary]:
-        """Generate thread summary if enough messages."""
-        thread = await self._store.get_thread(thread_id)
-        if not thread:
-            return None
-
-        messages = [
-            {"content": m.content, "role": m.role, "cat_id": m.cat_id}
-            for m in thread.messages
-        ]
-        return self._auto_summarizer.summarize(thread_id, messages)
 
     @classmethod
     def reset(cls):

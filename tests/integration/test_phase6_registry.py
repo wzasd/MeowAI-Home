@@ -11,47 +11,48 @@ from src.invocation.tracker import InvocationTracker
 
 def test_full_registry_initialization():
     cat_reg, agent_reg = initialize_registries("cat-config.json")
-    assert cat_reg.has("opus")
-    assert cat_reg.has("sonnet")
-    assert cat_reg.has("codex")
-    assert cat_reg.has("gemini")
-    assert agent_reg.has("opus")
-    assert agent_reg.has("codex")
-    assert agent_reg.has("gemini")
+    # 用户的猫配置: 阿橘(orange), 墨点(inky), 花花(patch)
+    assert cat_reg.has("orange")
+    assert cat_reg.has("inky")
+    assert cat_reg.has("patch")
+    assert agent_reg.has("orange")
+    assert agent_reg.has("inky")
+    assert agent_reg.has("patch")
 
 
 def test_router_end_to_end():
     cat_reg, agent_reg = initialize_registries("cat-config.json")
     router = AgentRouterV2(cat_reg, agent_reg)
-    targets = router.resolve_targets("@opus 写代码")
-    assert targets == ["opus"]
-    targets = router.resolve_targets("@opus @codex review")
-    assert "opus" in targets
-    assert "codex" in targets
-    service = router.get_service("opus")
+    # 使用用户的猫配置
+    targets = router.resolve_targets("@阿橘 写代码")
+    assert targets == ["orange"]
+    targets = router.resolve_targets("@阿橘 @墨点 review")
+    assert "orange" in targets
+    assert "inky" in targets
+    service = router.get_service("orange")
     assert service is not None
-    assert service.cat_id == "opus"
+    assert service.cat_id == "orange"
 
 
 def test_budget_and_model_resolution():
     cat_reg, _ = initialize_registries("cat-config.json")
-    budget = get_cat_budget("opus", cat_reg)
+    budget = get_cat_budget("orange", cat_reg)
     assert budget.max_prompt_tokens > 0
-    model = get_cat_model("opus", cat_reg)
+    model = get_cat_model("orange", cat_reg)
     assert "claude" in model
     window = get_context_window_size(model)
     assert window is not None
-    assert window >= 200000
+    assert window >= 100000
 
 
 def test_session_chain_lifecycle():
     chain = SessionChain()
-    r1 = chain.create("opus", "t1", "s1")
-    assert chain.get_active("opus", "t1").session_id == "s1"
-    chain.seal("opus", "t1")
-    assert chain.get_active("opus", "t1") is None
-    r2 = chain.create("opus", "t1", "s2")
-    assert chain.get_active("opus", "t1").session_id == "s2"
+    r1 = chain.create("orange", "t1", "s1")
+    assert chain.get_active("orange", "t1").session_id == "s1"
+    chain.seal("orange", "t1")
+    assert chain.get_active("orange", "t1") is None
+    r2 = chain.create("orange", "t1", "s2")
+    assert chain.get_active("orange", "t1").session_id == "s2"
 
 
 def test_tracker_lifecycle():

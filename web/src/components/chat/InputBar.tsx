@@ -1,10 +1,14 @@
 import { useRef, useEffect, useState, type KeyboardEvent } from "react";
-import { Send, Gamepad2, Lightbulb, Wrench, HelpCircle } from "lucide-react";
+import { Send, Gamepad2, Lightbulb, Wrench, HelpCircle, X, Reply } from "lucide-react";
 import { useChatStore } from "../../stores/chatStore";
 import { useThreadStore } from "../../stores/threadStore";
+import { VoiceInput } from "./VoiceInput";
+import type { MessageResponse } from "../../types";
 
 interface InputBarProps {
   disabled?: boolean;
+  replyTo?: MessageResponse | null;
+  onCancelReply?: () => void;
 }
 
 interface CatOption {
@@ -92,12 +96,19 @@ const SLASH_COMMANDS: SlashCommand[] = [
   },
 ];
 
-export function InputBar({ disabled = false }: InputBarProps) {
+export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarProps) {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const startStreaming = useChatStore((s) => s.startStreaming);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
+
+  // Clear text when reply is cancelled
+  useEffect(() => {
+    if (!replyTo) {
+      setText("");
+    }
+  }, [replyTo]);
 
   // Mention autocomplete state
   const [showMentions, setShowMentions] = useState(false);
@@ -293,6 +304,23 @@ export function InputBar({ disabled = false }: InputBarProps) {
 
   return (
     <div className="relative border-t border-gray-200 bg-white px-4 py-4 dark:border-gray-700 dark:bg-gray-800 lg:px-6">
+      {/* Reply indicator */}
+      {replyTo && (
+        <div className="mb-2 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
+          <div className="flex items-center gap-2 text-sm">
+            <Reply size={14} className="text-blue-500" />
+            <span className="text-gray-600 dark:text-gray-400">
+              回复: <span className="line-clamp-1 max-w-[200px] text-gray-800 dark:text-gray-200">{replyTo.content.slice(0, 50)}...</span>
+            </span>
+          </div>
+          <button
+            onClick={onCancelReply}
+            className="rounded p-1 text-gray-400 hover:bg-blue-100 hover:text-gray-600 dark:hover:bg-blue-800"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {/* Slash command dropdown */}
       {showSlashMenu && (
         <div
@@ -378,6 +406,10 @@ export function InputBar({ disabled = false }: InputBarProps) {
       )}
 
       <div className="mx-auto flex max-w-4xl items-end gap-2">
+        <VoiceInput
+          onTranscript={(t) => setText((prev) => prev + t)}
+          disabled={disabled}
+        />
         <textarea
           ref={textareaRef}
           value={text}
@@ -386,7 +418,7 @@ export function InputBar({ disabled = false }: InputBarProps) {
           placeholder="输入消息... (Enter 发送，Shift+Enter 换行，@ 提及猫咪，/ 斜杠命令)"
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
         />
         <button
           onClick={handleSend}

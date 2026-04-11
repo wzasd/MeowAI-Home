@@ -11,9 +11,13 @@ interface ChatState {
   isStreaming: boolean;
   activeSkill: string | null;
   intentMode: string | null;
+  replyingTo: MessageResponse | null;
 
   fetchMessages: (threadId: string) => Promise<void>;
   addLocalMessage: (msg: MessageResponse) => void;
+  updateMessage: (messageId: string, content: string) => void;
+  deleteMessage: (messageId: string) => void;
+  setReplyingTo: (msg: MessageResponse | null) => void;
   addStreamingResponse: (catId: string, response: StreamingCatResponse) => void;
   addStreamingThinking: (catId: string, content: string) => void;
   setSkill: (name: string | null) => void;
@@ -30,6 +34,7 @@ export const useChatStore = create<ChatState>((set) => ({
   isStreaming: false,
   activeSkill: null,
   intentMode: null,
+  replyingTo: null,
 
   fetchMessages: async (threadId: string) => {
     const data = await api.messages.list(threadId);
@@ -39,6 +44,22 @@ export const useChatStore = create<ChatState>((set) => ({
   addLocalMessage: (msg) => {
     set((state) => ({ messages: [...state.messages, msg] }));
   },
+
+  updateMessage: (messageId, content) => {
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, content, is_edited: true } : m
+      ),
+    }));
+  },
+
+  deleteMessage: (messageId) => {
+    set((state) => ({
+      messages: state.messages.filter((m) => m.id !== messageId),
+    }));
+  },
+
+  setReplyingTo: (msg) => set({ replyingTo: msg }),
 
   addStreamingResponse: (catId, response) => {
     set((state) => {
@@ -82,5 +103,6 @@ export const useChatStore = create<ChatState>((set) => ({
       isStreaming: false,
       activeSkill: null,
       intentMode: null,
+      replyingTo: null,
     }),
 }));

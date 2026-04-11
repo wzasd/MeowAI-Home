@@ -10,7 +10,17 @@ from src.utils.cli_spawn import spawn_cli
 
 class ClaudeProvider(BaseProvider):
     def _build_args(self, prompt: str, options: InvocationOptions) -> list:
-        args = list(self.config.cli_args)
+        args = ["--print"]
+
+        # Carry over base args from config, but skip our own managed flags
+        for arg in self.config.cli_args:
+            if arg in ("--output-format", "stream-json"):
+                continue
+            args.append(arg)
+
+        # Always use stream-json for real-time streaming
+        args.extend(["--output-format", "stream-json", "--verbose"])
+
         if options and options.system_prompt:
             args.extend(["--append-system-prompt", options.system_prompt])
         if options and options.session_id:
@@ -40,6 +50,10 @@ class ClaudeProvider(BaseProvider):
         event_type = event.get("type", "")
         messages = []
 
+        # Skip system/hook events (startup hooks, etc.)
+        if event_type in ("system",):
+            return messages
+
         if event_type == "assistant":
             msg_data = event.get("message", {})
             for block in msg_data.get("content", []):
@@ -48,7 +62,7 @@ class ClaudeProvider(BaseProvider):
                     if text:
                         messages.append(AgentMessage(type=AgentMessageType.TEXT, content=text, cat_id=self.cat_id))
                 elif isinstance(block, dict) and block.get("type") == "thinking":
-                    text = block.get("text", "")
+                    text = block.get("thinking") or block.get("text", "")
                     if text:
                         messages.append(AgentMessage(type=AgentMessageType.THINKING, content=text, cat_id=self.cat_id))
 

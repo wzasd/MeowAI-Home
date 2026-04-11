@@ -1,0 +1,155 @@
+# Phase C: MCP 工具系统 (C1-C3) 完成
+
+**日期:** 2026-04-11
+**阶段:** Phase C - MCP 工具系统
+**状态:** ✅ 已完成
+
+---
+
+## 今日成果
+
+Phase C (MCP 工具系统) 全部完成，3个子模块 + 39个测试。
+
+### 已完成的模块
+
+| 模块 | 文件 | 代码行 | 测试数 |
+|------|------|--------|--------|
+| **C1 Callback 框架** | `src/mcp/callback.py` | 212 | 15 |
+| **C2 核心 MCP 工具** | `src/mcp/tools/__init__.py` | 267 | 17 |
+| **C3 Session Chain 工具** | `src/mcp/tools/session_chain.py` | 116 | 7 |
+
+**总计:** 595 行新代码，39 测试全部通过
+
+---
+
+## 技术实现要点
+
+### C1: Callback 框架
+
+**核心组件:**
+- `CallbackConfig` - 配置类 (invocation_id, token, api_url, headers)
+- `CallbackOutbox` - 持久化 Outbox (at-least-once delivery)
+- `CallbackDelivery` - HTTP 发送 + 指数退避重试
+
+**重试策略:**
+- 最多 5 次重试
+- 指数退避: 1s, 2s, 4s, 8s... (max 60s)
+- 4xx 错误不重试，5xx 重试
+
+```python
+delivery = CallbackDelivery(max_retries=5, base_delay=1.0)
+result = delivery.send(config, payload)
+# DeliveryResult(status="delivered", attempts=2)
+```
+
+### C2: 核心 MCP 工具 (10个)
+
+| 工具 | 功能 | 参数 |
+|------|------|------|
+| `post_message` | 发送消息到 thread | thread, content, role, metadata |
+| `get_thread_context` | 获取对话上下文 | thread, limit |
+| `list_threads` | 列出所有 threads | db, filter, limit |
+| `create_rich_block` | 创建富文本块 | block_type, content, **kwargs |
+| `request_permission` | 请求用户授权 | action, reason, timeout |
+| `update_task` | 创建/更新任务 | store, title, status, assignee |
+| `list_tasks` | 列出任务 | store, status, assignee |
+| `multi_mention` | 并行调用多猫 | cat_ids (max 3), message |
+| `generate_document` | 生成文档 | content, output_format, title |
+
+**Rich Block 类型:**
+- `code` - 代码块 (language, line_numbers)
+- `diff` - 代码差异 (old_path, new_path)
+- `checklist` - 检查清单 (items)
+- `media` - 媒体文件 (media_type, url, alt)
+
+### C3: Session Chain 工具 (4个)
+
+```python
+list_session_chain(thread_id, manager) -> {sessions: [...]}
+read_session_events(session_id, view="raw", limit) -> {events: [...]}
+read_session_digest(session_id, transcript) -> {tool_names, file_paths, ...}
+read_invocation_detail(invocation_id, tracker) -> {cat_id, status, duration_ms}
+```
+
+**视图模式:**
+- `raw` - 原始事件格式
+- `chat` - 聊天消息格式
+- `handoff` - 交接摘要格式
+
+---
+
+## 测试结果
+
+```
+$ python3.11 -m pytest tests/mcp/ -v
+
+39 passed in 0.40s
+```
+
+全量回归测试: 899 passed
+(2 failed / 11 errors in e2e/benchmark - 环境依赖)
+
+---
+
+## 累计进度
+
+| 阶段 | 模块数 | 代码行 | 测试数 |
+|------|--------|--------|--------|
+| Phase A (Invocation) | 5 | 630 | 97 |
+| Phase B (Session) | 3 | 518 | 61 |
+| Phase C (MCP) | 3 | 595 | 39 |
+| **累计** | **11** | **1743** | **197** |
+
+---
+
+## 架构整合
+
+### MCP 工具使用流程
+
+```
+A2AController.invoke()
+    ↓
+MCPExecutor.register_tools(thread)
+    ↓
+Tool function called with context
+    ↓
+post_message / get_thread_context / multi_mention
+    ↓
+CallbackOutbox.queue() (if async)
+    ↓
+CallbackDelivery.send() with retry
+```
+
+### 与现有系统集成
+
+- **Callback** - 用于异步工具调用通知
+- **Core Tools** - 供 Cat 在对话中调用
+- **Session Chain** - 用于跨 Session 上下文访问
+
+---
+
+## 与 Clowder AI 对比
+
+| 特性 | Clowder AI | MeowAI Home | 状态 |
+|------|-----------|-------------|------|
+| Callback 框架 | ✅ | ✅ | ✅ 对齐 |
+| post_message | ✅ | ✅ | ✅ 对齐 |
+| get_thread_context | ✅ | ✅ | ✅ 对齐 |
+| search_evidence | ✅ | 🔄 | Phase D |
+| multi_mention | ✅ | ✅ | ✅ 对齐 |
+| Session Chain | ✅ | ✅ | ✅ 对齐 |
+
+---
+
+## 下一步
+
+**Phase D: 配置系统升级 (D1-D3)**
+- D1: ConfigLoader 增强 (roster, reviewPolicy)
+- D2: EnvRegistry — 环境变量注册表
+- D3: RuntimeCatalog — 运行时 CRUD
+
+预计代码量: ~600 行，20+ 测试
+
+---
+
+*Phase C MCP 工具系统完成！14个核心工具全部实现，为 Agent 能力扩展打下基础。*

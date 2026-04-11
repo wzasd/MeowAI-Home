@@ -1,15 +1,32 @@
 import { useState, useEffect } from "react";
-import { Menu } from "lucide-react";
+import { Menu, Settings, Inbox, Target, Code, MessageSquare, PanelRightOpen, PanelRightClose } from "lucide-react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { ThreadSidebar } from "./components/thread/ThreadSidebar";
 import { ChatArea } from "./components/chat/ChatArea";
 import { ThemeToggle } from "./components/ui/ThemeToggle";
 import { HealthGuard } from "./components/ui/HealthGuard";
+import { SettingsPanel } from "./components/settings/SettingsPanel";
+import { RightStatusPanel } from "./components/right-panel/RightStatusPanel";
+import { SignalInboxPage } from "./components/signals/SignalInboxPage";
+import { MissionHubPage } from "./components/mission/MissionHubPage";
+import { WorkspacePanel } from "./components/workspace/WorkspacePanel";
 import { useThemeStore } from "./stores/themeStore";
+
+type Page = "chat" | "signals" | "mission" | "workspace";
+
+const NAV_ITEMS: { key: Page; icon: typeof MessageSquare; label: string; shortLabel: string }[] = [
+  { key: "chat", icon: MessageSquare, label: "对话", shortLabel: "对话" },
+  { key: "signals", icon: Inbox, label: "收件箱", shortLabel: "收件箱" },
+  { key: "mission", icon: Target, label: "任务看板", shortLabel: "任务" },
+  { key: "workspace", icon: Code, label: "工作区", shortLabel: "工作区" },
+];
 
 export default function App() {
   useWebSocket();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState<Page>("chat");
   const { isDarkMode } = useThemeStore();
 
   // Close mobile menu on escape
@@ -22,23 +39,36 @@ export default function App() {
   }, []);
 
   return (
-    <div
-      className={`flex h-screen overflow-hidden bg-gray-50 transition-colors dark:bg-gray-900 ${isDarkMode ? "dark" : ""}`}
-    >
+    <div className={`flex h-screen overflow-hidden bg-gray-50 transition-colors dark:bg-gray-900 ${isDarkMode ? "dark" : ""}`}>
       {/* Mobile overlay */}
       {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
+        <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar - Fixed overlay on mobile, flex item on desktop */}
+      {/* Sidebar */}
       <aside
         className={`${
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } fixed left-0 top-0 z-30 h-full w-64 transform border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out dark:border-gray-700 dark:bg-gray-800 lg:static lg:w-64 lg:translate-x-0 lg:transition-none xl:w-72`}
+        } fixed left-0 top-0 z-30 flex h-full w-64 flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out dark:border-gray-700 dark:bg-gray-800 lg:static lg:w-64 lg:translate-x-0 lg:transition-none xl:w-72`}
       >
+        {/* Nav tabs at top of sidebar */}
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => { setCurrentPage(item.key); setIsMobileMenuOpen(false); }}
+              className={`flex flex-1 items-center justify-center gap-1 rounded px-1 py-1.5 text-xs font-medium transition-colors ${
+                currentPage === item.key
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                  : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+              }`}
+              title={item.label}
+            >
+              <item.icon size={14} />
+              <span className="hidden lg:inline">{item.shortLabel}</span>
+            </button>
+          ))}
+        </div>
         <ThreadSidebar onCloseMobile={() => setIsMobileMenuOpen(false)} />
       </aside>
 
@@ -47,29 +77,52 @@ export default function App() {
         {/* Mobile header */}
         <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-800 lg:hidden">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              aria-label="打开菜单"
-            >
+            <button onClick={() => setIsMobileMenuOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="打开菜单">
               <Menu size={20} className="text-gray-600 dark:text-gray-300" />
             </button>
             <span className="text-lg font-bold text-gray-800 dark:text-gray-100">MeowAI</span>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            {currentPage === "chat" && (
+              <button onClick={() => setIsRightPanelOpen(!isRightPanelOpen)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                {isRightPanelOpen ? <PanelRightClose size={18} className="text-gray-600 dark:text-gray-300" /> : <PanelRightOpen size={18} className="text-gray-600 dark:text-gray-300" />}
+              </button>
+            )}
+            <button onClick={() => setIsSettingsOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="设置">
+              <Settings size={18} className="text-gray-600 dark:text-gray-300" />
+            </button>
+            <ThemeToggle />
+          </div>
         </header>
 
-        {/* Desktop theme toggle */}
-        <div className="absolute right-4 top-3 z-10 hidden lg:block">
-          <ThemeToggle />
-        </div>
+        {/* Page content */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Main page */}
+          <div className="relative flex-1 overflow-hidden">
+            {currentPage === "chat" && (
+              <ChatArea
+                isRightPanelOpen={isRightPanelOpen}
+                onToggleRightPanel={() => setIsRightPanelOpen(!isRightPanelOpen)}
+              />
+            )}
+            {currentPage === "signals" && <SignalInboxPage />}
+            {currentPage === "mission" && <MissionHubPage />}
+            {currentPage === "workspace" && <WorkspacePanel />}
+          </div>
 
-        {/* Chat area - takes remaining space */}
-        <ChatArea />
+          {/* Right panel (chat only) */}
+          {currentPage === "chat" && isRightPanelOpen && (
+            <RightStatusPanel
+              threadId={null}
+              isOpen={isRightPanelOpen}
+              onClose={() => setIsRightPanelOpen(false)}
+            />
+          )}
+        </div>
       </main>
 
-      {/* Health protection guard */}
       <HealthGuard />
+      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

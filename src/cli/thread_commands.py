@@ -160,6 +160,13 @@ def thread_info():
 
 
 def get_cat_mention(cat_id: str) -> str:
-    """获取 cat 的 mention"""
-    mention_map = {"orange": "dev", "inky": "review", "patch": "research"}
-    return mention_map.get(cat_id, "dev")
+    """获取 cat 的 mention 名称"""
+    try:
+        from src.cli.main import bootstrap_registries
+        cat_reg, _ = bootstrap_registries()
+        cfg = cat_reg.try_get(cat_id)
+        if cfg:
+            return cfg.display_name or cat_id
+    except Exception:
+        pass
+    return cat_id

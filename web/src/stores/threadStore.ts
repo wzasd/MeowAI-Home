@@ -13,6 +13,8 @@ interface ThreadState {
   fetchThreads: () => Promise<void>;
   selectThread: (id: string) => Promise<void>;
   createThread: (name: string, catId?: string) => Promise<string | null>;
+  renameThread: (id: string, name: string) => Promise<void>;
+  archiveThread: (id: string) => Promise<void>;
   deleteThread: (id: string) => Promise<void>;
   clearCurrent: () => void;
 }
@@ -60,6 +62,33 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       currentThread: thread,
     }));
     return thread.id;
+  },
+
+  renameThread: async (id: string, name: string) => {
+    await api.threads.rename(id, name);
+    set((state) => ({
+      threads: state.threads.map((t) => (t.id === id ? { ...t, name } : t)),
+      currentThread:
+        state.currentThread?.id === id
+          ? { ...state.currentThread, name }
+          : state.currentThread,
+    }));
+  },
+
+  archiveThread: async (id: string) => {
+    await api.threads.archive(id);
+    set((state) => ({
+      threads: state.threads.map((t) =>
+        t.id === id ? { ...t, is_archived: !t.is_archived } : t
+      ),
+      currentThread:
+        state.currentThread?.id === id
+          ? {
+              ...state.currentThread,
+              is_archived: !state.currentThread.is_archived,
+            }
+          : state.currentThread,
+    }));
   },
 
   deleteThread: async (id: string) => {

@@ -3,6 +3,7 @@ from src.thread import ThreadManager
 from src.router.agent_router_v2 import AgentRouterV2
 from src.models.cat_registry import CatRegistry
 from src.models.agent_registry import AgentRegistry
+from src.config.runtime_catalog import RuntimeCatalog, get_runtime_catalog
 
 
 def get_thread_manager(request: Request) -> ThreadManager:
@@ -19,3 +20,8 @@ def get_cat_registry(request: Request) -> CatRegistry:
 
 def get_agent_registry(request: Request) -> AgentRegistry:
     return request.app.state.agent_registry
+
+
+def get_runtime_catalog_dep(request: Request) -> RuntimeCatalog:
+    """Get runtime catalog instance."""
+    return get_runtime_catalog()
