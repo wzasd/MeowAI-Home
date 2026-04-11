@@ -96,6 +96,21 @@ export interface ConnectorListResponse {
   connectors: ConnectorResponse[];
 }
 
+export interface ConnectorBindingStatus {
+  name: string;
+  bound: boolean;
+  bound_at: string | null;
+  bound_user: string | null;
+}
+
+export interface ConnectorQrResponse {
+  name: string;
+  qr_data_url: string;
+  bind_url: string;
+  expires_in: number;
+  token: string;
+}
+
 export interface EnvVarResponse {
   name: string;
   category: string;

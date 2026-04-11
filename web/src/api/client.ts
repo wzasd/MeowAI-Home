@@ -8,6 +8,8 @@ import type {
   CatListResponse,
   CatDetailResponse,
   ConnectorListResponse,
+  ConnectorBindingStatus,
+  ConnectorQrResponse,
   EnvVarListResponse,
 } from "../types";
 
@@ -147,6 +149,30 @@ export const api = {
       request<{ success: boolean; message: string }>(`/api/connectors/${name}/test`, {
         method: "POST",
         body: JSON.stringify({ config }),
+      }),
+    getBindingStatus: (name: string) =>
+      request<ConnectorBindingStatus>(`/api/connectors/${name}/binding-status`),
+    getQr: (name: string) =>
+      request<ConnectorQrResponse>(`/api/connectors/${name}/qr`),
+    bindCallback: (name: string, token: string, userName: string) =>
+      request<{ success: boolean; name: string; bound: boolean; bound_user: string }>(
+        `/api/connectors/${name}/bind-callback`,
+        {
+          method: "POST",
+          body: JSON.stringify({ token, user_name: userName }),
+        }
+      ),
+    unbind: (name: string) =>
+      request<{ success: boolean; message: string }>(`/api/connectors/${name}/unbind`, {
+        method: "POST",
+      }),
+    enable: (name: string) =>
+      request<{ success: boolean; message: string }>(`/api/connectors/${name}/enable`, {
+        method: "POST",
+      }),
+    disable: (name: string) =>
+      request<{ success: boolean; message: string }>(`/api/connectors/${name}/disable`, {
+        method: "POST",
       }),
   },
 
