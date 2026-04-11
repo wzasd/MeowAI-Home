@@ -69,9 +69,10 @@ class Thread:
     messages: List[Message] = field(default_factory=list)
     current_cat_id: str = DEFAULT_CAT_ID
     is_archived: bool = False
+    project_path: Optional[str] = None  # Git 仓库根路径
 
     @classmethod
-    def create(cls, name: str, current_cat_id: str = DEFAULT_CAT_ID) -> "Thread":
+    def create(cls, name: str, current_cat_id: str = DEFAULT_CAT_ID, project_path: Optional[str] = None) -> "Thread":
         """创建新 thread"""
         now = datetime.now(timezone.utc)
         return cls(
@@ -80,7 +81,8 @@ class Thread:
             created_at=now,
             updated_at=now,
             current_cat_id=current_cat_id,
-            messages=[]
+            messages=[],
+            project_path=project_path
         )
 
     def add_message(self, role: RoleType, content: str, cat_id: Optional[str] = None) -> None:
@@ -91,7 +93,7 @@ class Thread:
         self.updated_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "id": self.id,
             "name": self.name,
             "created_at": self.created_at.isoformat(),
@@ -100,6 +102,9 @@ class Thread:
             "current_cat_id": self.current_cat_id,
             "is_archived": self.is_archived
         }
+        if self.project_path:
+            result["project_path"] = self.project_path
+        return result
 
     @classmethod
     def from_dict(cls, data: dict) -> "Thread":
@@ -116,5 +121,6 @@ class Thread:
             updated_at=datetime.fromisoformat(data["updated_at"]),
             messages=[Message.from_dict(m) for m in data.get("messages", [])],
             current_cat_id=data.get("current_cat_id", DEFAULT_CAT_ID),
-            is_archived=data.get("is_archived", False)
+            is_archived=data.get("is_archived", False),
+            project_path=data.get("project_path")
         )

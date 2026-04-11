@@ -41,7 +41,8 @@ class SQLiteStore(ThreadStore, MessageStore):
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 current_cat_id TEXT NOT NULL,
-                is_archived INTEGER DEFAULT 0
+                is_archived INTEGER DEFAULT 0,
+                project_path TEXT
             )
         """)
 
@@ -82,21 +83,23 @@ class SQLiteStore(ThreadStore, MessageStore):
         db = await self._get_db()
         await db.execute("""
             INSERT INTO threads
-            (id, name, created_at, updated_at, current_cat_id, is_archived)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (id, name, created_at, updated_at, current_cat_id, is_archived, project_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
                 current_cat_id = excluded.current_cat_id,
-                is_archived = excluded.is_archived
+                is_archived = excluded.is_archived,
+                project_path = excluded.project_path
         """, (
             thread.id,
             thread.name,
             thread.created_at.isoformat(),
             thread.updated_at.isoformat(),
             thread.current_cat_id,
-            1 if thread.is_archived else 0
+            1 if thread.is_archived else 0,
+            thread.project_path
         ))
         await db.commit()
 
@@ -121,7 +124,8 @@ class SQLiteStore(ThreadStore, MessageStore):
             updated_at=datetime.fromisoformat(row[3]),
             current_cat_id=row[4],
             is_archived=bool(row[5]),
-            messages=messages
+            messages=messages,
+            project_path=row[6] if len(row) > 6 else None
         )
 
     async def list_threads(self, include_archived: bool = False) -> List[Thread]:
@@ -151,7 +155,8 @@ class SQLiteStore(ThreadStore, MessageStore):
                 updated_at=datetime.fromisoformat(row[3]),
                 current_cat_id=row[4],
                 is_archived=bool(row[5]),
-                messages=messages
+                messages=messages,
+                project_path=row[6] if len(row) > 6 else None
             ))
 
         return threads
@@ -182,7 +187,8 @@ class SQLiteStore(ThreadStore, MessageStore):
                 updated_at=datetime.fromisoformat(row[3]),
                 current_cat_id=row[4],
                 is_archived=bool(row[5]),
-                messages=messages
+                messages=messages,
+                project_path=row[6] if len(row) > 6 else None
             ))
         return threads
 

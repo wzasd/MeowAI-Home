@@ -43,6 +43,17 @@ def test_thread_create():
     assert len(thread.id) == 8  # 短ID
     assert len(thread.messages) == 0
     assert thread.is_archived is False
+    assert thread.project_path is None
+
+
+def test_thread_create_with_project_path():
+    """测试 thread 创建带 project_path"""
+    thread = Thread.create("测试会话", current_cat_id="inky", project_path="/path/to/project")
+    assert thread.name == "测试会话"
+    assert thread.current_cat_id == "inky"
+    assert thread.project_path == "/path/to/project"
+    assert len(thread.id) == 8
+    assert len(thread.messages) == 0
 
 
 def test_thread_add_message():
@@ -66,6 +77,17 @@ def test_thread_to_dict():
     assert data["current_cat_id"] == "orange"
     assert len(data["messages"]) == 1
     assert "id" in data
+    # project_path is None, so it should not be included
+    assert "project_path" not in data
+
+
+def test_thread_to_dict_with_project_path():
+    """测试 thread 序列化带 project_path"""
+    thread = Thread.create("Test", project_path="/path/to/project")
+    data = thread.to_dict()
+
+    assert data["name"] == "Test"
+    assert data["project_path"] == "/path/to/project"
 
 
 def test_thread_from_dict():
@@ -86,6 +108,24 @@ def test_thread_from_dict():
     assert thread.name == "Test Thread"
     assert thread.current_cat_id == "patch"
     assert len(thread.messages) == 1
+    assert thread.project_path is None
+
+
+def test_thread_from_dict_with_project_path():
+    """测试 thread 反序列化带 project_path"""
+    data = {
+        "id": "abc123",
+        "name": "Test Thread",
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+        "messages": [],
+        "current_cat_id": "patch",
+        "is_archived": False,
+        "project_path": "/path/to/repo"
+    }
+    thread = Thread.from_dict(data)
+    assert thread.id == "abc123"
+    assert thread.project_path == "/path/to/repo"
 
 
 def test_message_from_dict_missing_fields():
