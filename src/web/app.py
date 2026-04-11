@@ -58,10 +58,26 @@ def create_app() -> FastAPI:
         allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
     )
 
+    from src.web.routes.cats import router as cats_router
+    from src.web.routes.config import router as config_router
+    from src.web.routes.connectors import router as connectors_router
+    from src.web.routes.workspace import router as workspace_router
+
     app.include_router(threads_router, prefix="/api")
     app.include_router(messages_router, prefix="/api")
     app.include_router(ws_router)
     app.include_router(monitoring_router)
+    app.include_router(cats_router, prefix="/api")
+    app.include_router(config_router, prefix="/api")
+    app.include_router(connectors_router, prefix="/api")
+    app.include_router(workspace_router, prefix="/api")
+
+    # Mount packs routes if available
+    try:
+        from src.web.routes.packs import router as packs_router
+        app.include_router(packs_router, prefix="/api")
+    except ImportError:
+        pass
 
     @app.get("/api/health")
     async def health():
