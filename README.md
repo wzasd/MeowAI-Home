@@ -1,87 +1,284 @@
-# MeowAI Home 🐱
+# MeowAI Home
 
-[![Tests](https://img.shields.io/badge/tests-721%2F721-brightgreen)](./tests)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](./pyproject.toml)
-[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-
-> 🏠 **企业级多 Agent AI 协作平台** — 开源、可商用、功能完整
-
-**MeowAI Home** 是 [Clowder AI](https://clowder.ai) 的开源替代品，支持多模型 Agent 协作、三层记忆系统、技能框架和企业级治理。
+企业级多 Agent AI 协作平台 — 开源、可商用、功能完整。
 
 ---
 
-## ✨ 核心特性
+## 功能一览
 
-| 特性 | 状态 | 说明 |
+### 多 Agent 协作
+
+多个 AI Agent 同时在线，通过 `@mention` 自由调度：
+
+```
+你: @orange 帮我实现一个排序函数
+阿橘: 好的！我来写一个快速排序...
+
+你: @inky @orange 审查一下这个实现 #ideate
+墨点: 第 15 行有边界问题...
+阿橘: 了解了，我修一下...
+```
+
+- **@mention 路由** — 输入 `@猫名` 即可指定 Agent 响应
+- **并行模式** `#ideate` — 多个 Agent 同时给出独立意见
+- **串行模式** `#execute` — Agent 按顺序接力完成任务
+- **批判模式** `#critique` — 严格审查找出问题
+
+### 三层记忆系统
+
+Agent 拥有持久记忆，跨对话保留上下文：
+
+| 记忆层 | 功能 | 示例 |
+|--------|------|------|
+| **Episodic** | 对话历史存储与检索 | "上次讨论的架构方案是什么？" |
+| **Semantic** | 知识图谱，实体关系 | 记住你偏好 Python、团队用 FastAPI |
+| **Procedural** | 工作流模式，经验积累 | 记住 TDD 流程的成功率 |
+
+### 技能系统
+
+25+ 内置技能，YAML 定义，可扩展：
+
+| 类别 | 技能 | 说明 |
 |------|------|------|
-| 🐱 **多 Agent 协作** | ✅ | @mention 路由，并行/串行执行 |
-| 🧠 **三层记忆** | ✅ | Episodic/Semantic/Procedural |
-| 🎯 **技能框架** | ✅ | 25+ 技能，YAML 定义 |
-| 🔧 **MCP 工具** | ✅ | 16 个标准工具 |
-| 🌐 **Web UI** | ✅ | React + FastAPI，流式响应 |
-| 📊 **监控告警** | ✅ | Prometheus + 健康检查 |
-| 🔐 **安全审计** | ✅ | JWT + RBAC + 审计日志 |
-| 🚀 **K8s 原生** | ✅ | 存活/就绪探针 |
+| 开发 | `#tdd` | 测试驱动开发全流程 |
+| 开发 | `debugging` | 系统化排查 Bug |
+| 开发 | `quality-gate` | 代码质量门禁 |
+| 计划 | `writing-plans` | 结构化实施计划 |
+| 协作 | `request-review` | 请求代码审查 |
+| 协作 | `cross-cat-handoff` | 跨 Agent 任务交接 |
+| 合并 | `merge-gate` | 合并前检查 |
+| 调研 | `deep-research` | 深度调研与信息聚合 |
+| MCP | `pencil-design` | 设计稿分析 |
+| MCP | `browser-automation` | 浏览器自动化 |
+
+### 多模型支持
+
+复用已有订阅，无需额外 API Key 费用：
+
+| Provider | 订阅模式 | 说明 |
+|----------|----------|------|
+| Claude (Anthropic) | Claude Max / API | 官方 CLI 子进程调用 |
+| Codex (OpenAI) | ChatGPT Plus / API | 复用 Plus 订阅 |
+| Gemini (Google) | Gemini Advanced / API | 复用 Advanced 订阅 |
+| OpenCode | 本地模型 | 本地部署，零成本 |
+
+### 工作流引擎
+
+DAG 驱动的工作流，支持模板和自定义：
+
+```
+#brainstorm @orange @inky @patch 如何优化数据库查询？
+→ 三只猫同时给出方案 → 汇总最佳建议
+
+#parallel @orange 写前端 @inky 写后端
+→ 两只猫并行工作 → 合并结果
+
+@planner 设计一个完整的用户认证系统
+→ 自动规划任务 → 分配给合适的 Agent
+```
+
+### 治理与安全
+
+**铁律系统** — 4 条不可违反的规则：
+- 数据安全：禁止删除非项目文件
+- 进程保护：禁止执行危险系统命令
+- 配置只读：核心配置不可被 Agent 修改
+- 网络边界：禁止未授权的外部请求
+
+**SOP 工作流**：
+- `#tdd` — 测试驱动开发
+- `#review` — 代码审查
+- `#deploy` — 部署发布
+
+### Web UI
+
+React + FastAPI 构建，支持实时协作：
+
+- **Thread 管理** — 多会话并行，快速切换
+- **实时聊天** — WebSocket 流式输出，Markdown 渲染
+- **Agent 浏览器** — 查看和配置 Agent
+- **技能市场** — 浏览、安装技能
+- **监控面板** — 系统状态、性能指标
+
+### 监控与可观测性
+
+| 能力 | 说明 |
+|------|------|
+| **结构化日志** | JSON 格式输出，支持查询聚合 |
+| **审计日志** | 22 种事件类型，记录所有安全操作 |
+| **Prometheus 指标** | 12 类指标，Grafana 直接对接 |
+| **健康检查** | K8s 存活/就绪探针，自动故障恢复 |
+
+### 多平台接入
+
+支持通过多种平台与 Agent 对话：
+
+| 平台 | 说明 |
+|------|------|
+| **飞书** | 企业办公场景 |
+| **钉钉** | 企业办公场景 |
+| **企业微信** | 企业办公场景 |
+| **Telegram** | 国际团队 |
+
+### 权限与认证
+
+| 能力 | 说明 |
+|------|------|
+| **JWT 认证** | Token 登录，安全可靠 |
+| **RBAC 权限** | admin / member / viewer 三级角色 |
+| **操作审计** | 记录所有敏感操作 |
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
-### Docker 一键启动
+### Docker（推荐）
 
 ```bash
 docker run -p 8000:8000 -p 5173:5173 meowai/meowai-home:latest
 ```
 
-访问 http://localhost:5173
+打开 http://localhost:5173
 
-### 源码安装
+### 源码
 
 ```bash
-git clone https://github.com/meowai/meowai-home.git
-cd meowai-home
+git clone https://github.com/wzasd/MeowAI-Home.git
+cd MeowAI-Home
 pip install -e ".[dev]"
-./scripts/dev.sh
+python3 -m uvicorn src.web.app:create_app --factory --port 8000
 ```
 
----
+### 完整栈（含监控）
 
-## 📊 性能指标
+```bash
+docker-compose up -d
+```
 
-| 指标 | 目标 | 实际 |
+启动后可用服务：
+
+| 服务 | 地址 | 说明 |
 |------|------|------|
-| P50 响应 | < 200ms | ✅ |
-| P95 响应 | < 500ms | ✅ |
-| 内存占用 | < 1GB | ✅ |
-| 测试覆盖 | > 90% | ✅ 100% |
+| Web UI | http://localhost:5173 | 前端界面 |
+| API | http://localhost:8000 | 后端接口 |
+| Prometheus | http://localhost:9090 | 指标采集 |
+| Grafana | http://localhost:3000 | 监控面板 |
 
 ---
 
-## 🏗️ 架构
+## 使用方式
+
+### CLI
+
+```bash
+# 启动对话
+meowai chat
+
+# 指定 Agent
+meowai chat --cat @review
+
+# Thread 管理
+meowai thread list
+meowai thread create "新项目"
+meowai thread switch <id>
+```
+
+### Web UI
+
+1. 打开 http://localhost:5173
+2. 创建新 Thread
+3. 输入消息，使用 `@猫名` 调度 Agent
+4. 使用 `#标签` 触发技能或工作流
+
+### API
+
+```bash
+# 创建 Thread
+curl -X POST http://localhost:8000/api/threads \
+  -H "Content-Type: application/json" \
+  -d '{"name": "我的项目"}'
+
+# 发送消息
+curl -X POST http://localhost:8000/api/threads/{id}/messages \
+  -H "Content-Type: application/json" \
+  -d '{"content": "@orange 你好", "role": "user"}'
+
+# 健康检查
+curl http://localhost:8000/api/monitoring/health
+```
+
+---
+
+## 架构
 
 ```
-User → FastAPI → A2AController → Agents → Models (Claude/GPT/Gemini/...)
-         ↓              ↓              ↓
-    Monitoring    Workflow Engine   Memory (FTS5)
+用户 (Web/CLI/API)
+    │
+    ▼
+FastAPI ─── WebSocket (实时推送)
+    │
+    ▼
+A2AController ─── IntentParser ─── SkillInjector
+    │
+    ├─→ Agent (Claude)  ──→  CLI 子进程
+    ├─→ Agent (Codex)   ──→  CLI 子进程
+    └─→ Agent (Gemini)  ──→  CLI 子进程
+    │
+    ▼
+MemoryDB ── SQLite + FTS5
+    ├─ Episodic   (对话历史)
+    ├─ Semantic    (知识图谱)
+    └─ Procedural  (工作流模式)
 ```
 
-**技术栈**: Python 3.10+ | FastAPI | React | SQLite+FTS5 | WebSocket
+**技术栈**：Python 3.10+ / FastAPI / React 18 / SQLite + FTS5 / WebSocket / Prometheus
 
 ---
 
-## 📚 文档
+## 项目结构
 
-- [快速开始](./docs/production/user/quickstart.md)
-- [架构设计](./docs/production/dev/architecture.md)
-- [部署指南](./docs/production/ops/docker.md)
-- [API 文档](http://localhost:8000/api/monitoring/health)
+```
+MeowAI-Home/
+├── src/                    # Python 后端
+│   ├── cli/                # CLI 命令
+│   ├── collaboration/      # A2A 协作控制器
+│   ├── connectors/         # 多平台接入 (飞书/钉钉/企微/Telegram)
+│   ├── evolution/          # 自我进化系统
+│   ├── governance/         # 铁律与治理
+│   ├── memory/             # 三层记忆系统
+│   ├── monitoring/         # 日志/审计/指标/健康检查
+│   ├── packs/              # Pack 预配置组
+│   ├── providers/          # 多模型适配器
+│   ├── router/             # Agent 路由
+│   ├── search/             # 向量搜索 + Hybrid RRF
+│   ├── skills/             # 技能框架
+│   ├── thread/             # Thread 管理
+│   ├── web/                # FastAPI + WebSocket
+│   └── workflow/           # DAG 工作流引擎
+├── tests/                  # 测试 (721 tests)
+├── skills/                 # 25 个 SKILL.md 定义
+├── web/                    # React 前端
+├── docs/                   # 文档与开发日记
+├── ops/                    # Prometheus/Grafana 配置
+├── scripts/                # 工具脚本
+├── Dockerfile              # 生产构建
+└── docker-compose.yml      # 完整部署栈
+```
 
 ---
 
-## 🤝 贡献
+## 环境变量
 
-欢迎 PR！请阅读 [贡献指南](./docs/production/dev/contributing.md)。
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `MEOWAI_ENV` | 运行环境 | `development` |
+| `MEOWAI_SECRET_KEY` | JWT 密钥 | 随机生成 |
+| `MEOWAI_DB_PATH` | SQLite 路径 | `./meowai.db` |
+| `MEOWAI_LOG_LEVEL` | 日志级别 | `INFO` |
+| `MEOWAI_PORT` | API 端口 | `8000` |
 
-## 📄 License
+---
 
-MIT © MeowAI Home Team
+## License
+
+MIT
