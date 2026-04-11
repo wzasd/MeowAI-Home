@@ -23,3 +23,19 @@ web/dist/
 docs/*
 !docs/diary/
 !docs/superpowers/
+
+# Reference code (third-party)
+cankao/
+
+# Documentation site
+docs-site/node_modules/
+docs-site/build/
+
+# Memory
+memory/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
