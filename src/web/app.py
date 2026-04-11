@@ -18,6 +18,7 @@ from src.web.routes.threads import router as threads_router
 from src.web.routes.messages import router as messages_router
 from src.web.routes.ws import router as ws_router
 from src.web.routes.monitoring import router as monitoring_router
+from src.web.routes.queue import router as queue_router
 
 
 @asynccontextmanager
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(config_router, prefix="/api")
     app.include_router(connectors_router, prefix="/api")
     app.include_router(workspace_router, prefix="/api")
+    app.include_router(queue_router, prefix="/api")
 
     # Mount packs routes if available
     try:
