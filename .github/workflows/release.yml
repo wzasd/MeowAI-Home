@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate release notes
+        run: |
+          echo "## 🎉 MeowAI Home ${{ github.ref_name }}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "### Quick Start" >> release_notes.md
+          echo '```bash' >> release_notes.md
+          echo 'docker run -p 8000:8000 -p 5173:5173 ghcr.io/meowai/meowai-home:${{ github.ref_name }}' >> release_notes.md
+          echo '```' >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### Changelog" >> release_notes.md
+          cat CHANGELOG.md | head -100 >> release_notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
