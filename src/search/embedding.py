@@ -1,7 +1,11 @@
 """Embedding provider interface with hash-based fallback"""
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 import hashlib
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingProvider(ABC):
@@ -49,3 +53,48 @@ class HashEmbedding(EmbeddingProvider):
 
     def dimension(self) -> int:
         return self._dim
+
+
+def create_embedding_provider(
+    provider_type: Optional[str] = None,
+    **kwargs
+) -> EmbeddingProvider:
+    """Factory function to create embedding provider.
+
+    Provider types:
+    - "openai": OpenAI API (requires OPENAI_API_KEY)
+    - "sentence_transformers": Local model (requires sentence-transformers)
+    - "hash": Deterministic hash-based (default, no dependencies)
+
+    Args:
+        provider_type: Type of provider, or None to auto-detect from env
+        **kwargs: Provider-specific arguments
+
+    Returns:
+        EmbeddingProvider instance
+    """
+    if provider_type is None:
+        provider_type = os.getenv("EMBEDDING_PROVIDER", "hash").lower()
+
+    if provider_type == "openai":
+        try:
+            from src.search.providers.openai import OpenAIEmbeddingProvider
+            return OpenAIEmbeddingProvider(**kwargs)
+        except ValueError as e:
+            logger.warning(f"OpenAI provider failed: {e}, falling back to hash")
+            return HashEmbedding()
+
+    elif provider_type in ("sentence_transformers", "sentence-transformers", "local"):
+        try:
+            from src.search.providers.sentence_transformers import SentenceTransformersProvider
+            return SentenceTransformersProvider(**kwargs)
+        except ImportError as e:
+            logger.warning(f"sentence-transformers not available: {e}, falling back to hash")
+            return HashEmbedding()
+
+    elif provider_type == "hash":
+        return HashEmbedding(**kwargs)
+
+    else:
+        logger.warning(f"Unknown provider type: {provider_type}, using hash")
+        return HashEmbedding(**kwargs)

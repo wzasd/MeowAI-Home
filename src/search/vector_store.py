@@ -4,19 +4,37 @@ import sqlite3
 import struct
 from typing import List, Optional, Tuple
 
-from src.search.embedding import EmbeddingProvider, HashEmbedding
+from src.search.embedding import EmbeddingProvider, create_embedding_provider
+from src.search.cache import EmbeddingCache
 
 
 class VectorStore:
     """Store and search embedding vectors in SQLite.
 
     Uses BLOB storage for vectors with Python-side cosine similarity.
+    Supports embedding caching to avoid recomputation.
     Gracefully degrades — no external vector DB required.
     """
 
-    def __init__(self, db_path: str, provider: Optional[EmbeddingProvider] = None):
+    def __init__(
+        self,
+        db_path: str,
+        provider: Optional[EmbeddingProvider] = None,
+        cache_db_path: Optional[str] = None,
+        use_cache: bool = True,
+    ):
         self.db_path = db_path
-        self.provider = provider or HashEmbedding()
+        self.provider = provider or create_embedding_provider()
+        self._cache: Optional[EmbeddingCache] = None
+
+        if use_cache:
+            cache_path = cache_db_path or db_path
+            self._cache = EmbeddingCache(
+                cache_path,
+                provider_name=self.provider.__class__.__name__,
+                dimension=self.provider.dimension(),
+            )
+
         self._init_db()
 
     def _init_db(self):
@@ -34,7 +52,16 @@ class VectorStore:
 
     async def upsert(self, content_id: str, content_type: str, text: str):
         """Store or update embedding for a content item."""
-        vec = await self.provider.embed(text)
+        # Check cache first
+        vec = None
+        if self._cache:
+            vec = self._cache.get(text)
+
+        if vec is None:
+            vec = await self.provider.embed(text)
+            if self._cache:
+                self._cache.set(text, vec)
+
         blob = struct.pack(f'{len(vec)}f', *vec)
         conn = sqlite3.connect(self.db_path)
         conn.execute("""
@@ -50,7 +77,15 @@ class VectorStore:
 
         Returns: [(content_id, content_text, score)]
         """
-        query_vec = await self.provider.embed(query)
+        # Check cache for query embedding
+        query_vec = None
+        if self._cache:
+            query_vec = self._cache.get(query)
+
+        if query_vec is None:
+            query_vec = await self.provider.embed(query)
+            if self._cache:
+                self._cache.set(query, query_vec)
         conn = sqlite3.connect(self.db_path)
 
         if content_type:
@@ -88,6 +123,27 @@ class VectorStore:
         deleted = cursor.rowcount > 0
         conn.close()
         return deleted
+
+    def cache_stats(self) -> Optional[dict]:
+        """Get embedding cache statistics."""
+        if self._cache:
+            return self._cache.stats()
+        return None
+
+    def clear_cache(self) -> bool:
+        """Clear embedding cache."""
+        if self._cache:
+            self._cache.clear()
+            return True
+        return False
+
+    def get_provider_info(self) -> dict:
+        """Get information about current embedding provider."""
+        return {
+            "type": self.provider.__class__.__name__,
+            "dimension": self.provider.dimension(),
+            "has_cache": self._cache is not None,
+        }
 
 
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
