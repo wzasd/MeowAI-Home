@@ -1,17 +1,18 @@
 import asyncio
 import re
 from dataclasses import dataclass
-from typing import List, Dict, Any, AsyncIterator, Optional, Set
+from typing import List, Dict, Any, AsyncIterator, Optional, Set, Tuple
 from pathlib import Path
 
 from src.collaboration.intent_parser import IntentResult
 from src.thread.models import Thread
 from src.collaboration.mcp_executor import MCPExecutor
 from src.collaboration.skill_injector import SkillInjector
+from src.collaboration.async_processor import get_processor
 from src.models.types import AgentMessageType, InvocationOptions
 from src.memory.entity_extractor import extract_entities
 from src.governance.iron_laws import get_iron_laws_prompt
-from src.evolution.scope_guard import ScopeGuard
+from src.evolution.scope_guard import ScopeGuard, DriftResult
 from src.skills.chain import ChainTracker
 
 
@@ -208,17 +209,28 @@ class A2AController:
 
         system_prompt += self.mcp_executor.build_tools_prompt(client)
 
-        # Auto-retrieve relevant memory
+        # Parallel preparation: memory retrieval + scope guard check
+        memory_task: Optional[asyncio.Task] = None
+        drift_task: Optional[asyncio.Task] = None
+
         if self.memory_service:
-            memory_context = self.memory_service.build_context(
-                query=message, thread_id=thread.id, max_items=5
+            memory_task = asyncio.create_task(
+                self._async_build_memory_context(message, thread.id),
+                name=f"memory_{breed_id}"
             )
+        if self.scope_guard:
+            drift_task = asyncio.create_task(
+                self._async_check_drift(message, thread.id),
+                name=f"drift_{breed_id}"
+            )
+
+        # Await parallel tasks
+        if memory_task:
+            memory_context = await memory_task
             if memory_context:
                 system_prompt += f"\n\n## 相关记忆\n{memory_context}"
-
-        # Scope guard: detect conversation drift
-        if self.scope_guard:
-            drift = self.scope_guard.check_drift(message, thread.id)
+        if drift_task:
+            drift = await drift_task
             if drift.is_drift:
                 system_prompt += f"\n\n{self.scope_guard.build_drift_warning(drift)}"
 
@@ -258,32 +270,68 @@ class A2AController:
             thinking="".join(thinking_parts) if thinking_parts else None,
         )
 
-        # Auto-store to episodic memory
+        # Post-response processing: memory storage + entity extraction (async background)
         if self.memory_service:
+            processor = get_processor()
+            # Fire and forget - don't block response
+            processor.fire_and_forget(
+                self._async_store_episodes(thread.id, breed_id, message, response),
+                name=f"store_memories_{breed_id}"
+            )
+            processor.fire_and_forget(
+                self._async_extract_entities(thread.id, message, response, breed_id),
+                name=f"extract_entities_{breed_id}"
+            )
+
+        return response
+
+    async def _async_build_memory_context(self, message: str, thread_id: str) -> str:
+        """Async wrapper for memory context building."""
+        if self.memory_service:
+            return self.memory_service.build_context(query=message, thread_id=thread_id, max_items=5)
+        return ""
+
+    async def _async_check_drift(self, message: str, thread_id: str) -> DriftResult:
+        """Async wrapper for scope guard drift check."""
+        if self.scope_guard:
+            return self.scope_guard.check_drift(message, thread_id)
+        from src.evolution.scope_guard import DriftResult
+        return DriftResult(is_drift=False, score=0.0, reason="", matched_query="", topic="", similarity=1.0)
+
+    async def _async_store_episodes(self, thread_id: str, breed_id: str, message: str, response: CatResponse) -> None:
+        """Store episodes to memory (background task)."""
+        if not self.memory_service:
+            return
+        try:
             self.memory_service.store_episode(
-                thread_id=thread.id, role="user",
+                thread_id=thread_id, role="user",
                 content=message, importance=3,
             )
             self.memory_service.store_episode(
-                thread_id=thread.id, role="assistant",
+                thread_id=thread_id, role="assistant",
                 content=response.content, cat_id=breed_id,
                 importance=5,
             )
             if response.thinking:
                 self.memory_service.store_episode(
-                    thread_id=thread.id, role="thinking",
+                    thread_id=thread_id, role="thinking",
                     content=response.thinking, cat_id=breed_id,
                     importance=2,
                 )
+        except Exception:
+            # Background task failure is non-critical
+            pass
 
-        # Auto-extract entities to semantic memory
-        if self.memory_service:
+    async def _async_extract_entities(self, thread_id: str, message: str, response: CatResponse, breed_id: str) -> None:
+        """Extract entities and relations (background task)."""
+        if not self.memory_service:
+            return
+        try:
             combined = f"{message} {response.content}"
             entities = extract_entities(combined)
             for name, entity_type, description in entities:
                 self.memory_service.semantic.add_entity(name, entity_type, description)
 
-            # Auto-infer relations between extracted entities
             if len(entities) >= 2:
                 from src.evolution.knowledge_evolution import _infer_relation_type
                 for i in range(len(entities)):
@@ -295,8 +343,9 @@ class A2AController:
                         if name_j not in related_names:
                             rel = _infer_relation_type(type_i, type_j)
                             self.memory_service.semantic.add_relation(name_i, name_j, rel)
-
-        return response
+        except Exception:
+            # Background task failure is non-critical
+            pass
 
     def _build_context(self, message: str, thread: Thread, current_index: int) -> str:
         if current_index == 0:
