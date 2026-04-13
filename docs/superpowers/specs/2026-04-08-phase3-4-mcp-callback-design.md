@@ -9,7 +9,7 @@
 
 让猫在执行过程中能够调用外部工具（轻量级本地实现）。
 
-**参考项目**: Clowder AI MCP Callbacks 机制
+**设计参考**: 行业标准 MCP Callback 机制
 
 ---
 

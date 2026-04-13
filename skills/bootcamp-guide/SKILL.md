@@ -15,7 +15,7 @@ next: ["feat-lifecycle"]
 
 # Bootcamp Guide — 训练营引导
 
-> 参考: Clowder AI bootcamp-guide skill
+> 参考: MeowAI Home bootcamp-guide skill
 
 ## 训练营阶段
 

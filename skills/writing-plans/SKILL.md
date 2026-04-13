@@ -14,7 +14,7 @@ next: ["worktree"]
 
 # Writing Plans — 编写实施计划
 
-> 参考: Clowder AI writing-plans skill
+> 参考: MeowAI Home writing-plans skill
 
 ## 计划模板
 

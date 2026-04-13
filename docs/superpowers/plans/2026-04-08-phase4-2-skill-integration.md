@@ -4,7 +4,7 @@
 
 **Goal:** 将技能系统集成到 A2A 协作流程，扩展到完整 25 个技能，实现对话中自动触发技能。
 
-**Architecture:** 在 A2AController 中集成 ManifestRouter，根据用户消息自动匹配技能，注入技能上下文到系统提示。参考 Clowder AI 扩展到完整技能集（25个）。
+**Architecture:** 在 A2AController 中集成 ManifestRouter，根据用户消息自动匹配技能，注入技能上下文到系统提示。扩展到完整技能集（25个）。
 
 **Tech Stack:** Python 3.9+, asyncio, pytest
 
@@ -20,7 +20,7 @@ Phase 4.1 已完成技能系统框架：
 
 Phase 4.2 目标：
 1. 集成到 A2AController（对话中自动触发）
-2. 扩展到完整 25 个技能（参考 Clowder AI）
+2. 扩展到完整 25 个技能
 3. 实现技能链式调用
 
 ---
@@ -221,9 +221,9 @@ pytest tests/collaboration/test_a2a_skill_integration.py -v
 - Modify: `skills/manifest.yaml`
 - Create: 19 个新的 SKILL.md
 
-**Context:** 参考 Clowder AI 的 25 个技能，扩展完整技能集。
+**Context:** 扩展到完整 25 个技能集。
 
-### 技能分类（参考 Clowder AI）
+### 技能分类
 
 **核心开发流程 (7个)** ✅ 已完成
 1. tdd
@@ -270,7 +270,7 @@ pytest tests/collaboration/test_a2a_skill_integration.py -v
 
 - [ ] **Step 2: 创建 19 个新技能**
 
-参考 `cankao/clowder-ai-main/cat-cafe-skills/` 创建：
+按技能规划创建：
 
 ```bash
 # 创建技能目录

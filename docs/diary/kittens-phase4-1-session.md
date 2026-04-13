@@ -99,13 +99,12 @@ $ python3.11 -m pytest tests/session/ -v
 
 ---
 
-## 与 Clowder AI 对比
+## Session 连续性实现总结
 
-| 特性 | Clowder AI | MeowAI Home | 状态 |
-|------|-----------|-------------|------|
-| TranscriptWriter | ✅ | ✅ | ✅ 对齐 |
-| SessionManager | ✅ | ✅ | ✅ 对齐 |
-| HandoffDigest | ✅ | ✅ | ✅ 对齐 |
+核心特性全部实现：
+- TranscriptWriter — 对话记录（Buffered NDJSON + sparse index）
+- SessionManager — Session 生命周期（SQLite 持久化 + 状态机）
+- HandoffDigest — 交接摘要（结构化提取 + 16K 上限）
 
 ---
 

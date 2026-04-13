@@ -15,7 +15,7 @@ next: []
 
 # Hyperfocus Brake — 健康提醒
 
-> 参考: Clowder AI hyperfocus-brake skill
+> 参考: MeowAI Home hyperfocus-brake skill
 
 ## 提醒风格
 

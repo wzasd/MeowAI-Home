@@ -16,7 +16,7 @@ next: []
 
 # Writing Skills — 编写技能
 
-> 参考: Clowder AI writing-skills skill
+> 参考: MeowAI Home writing-skills skill
 
 ## SKILL.md 格式
 

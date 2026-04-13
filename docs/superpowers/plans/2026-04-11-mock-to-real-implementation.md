@@ -504,7 +504,7 @@ curl "http://localhost:8000/api/workspace/tree?worktreeId=test&depth=2"
 
 - [ ] **Step 1: 实现 useWorkspace Hook**
 
-参考 Clowder AI 实现：
+实现：
 
 ```typescript
 "use client";

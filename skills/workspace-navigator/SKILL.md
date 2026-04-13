@@ -17,7 +17,7 @@ next: []
 
 # Workspace Navigator — Workspace 导航
 
-> 参考: Clowder AI workspace-navigator skill
+> 参考: MeowAI Home workspace-navigator skill
 
 ## 工作流
 

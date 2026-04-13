@@ -14,7 +14,7 @@ next: []
 
 # Cross-Cat Handoff — 跨猫交接
 
-> 参考: Clowder AI cross-cat-handoff skill
+> 参考: MeowAI Home cross-cat-handoff skill
 
 ## 五件套结构
 

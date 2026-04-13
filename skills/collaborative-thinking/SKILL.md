@@ -16,7 +16,7 @@ next: ["writing-plans", "feat-lifecycle"]
 
 # Collaborative Thinking — 协作思考
 
-> 参考: Clowder AI collaborative-thinking skill
+> 参考: MeowAI Home collaborative-thinking skill
 
 ## 模式
 

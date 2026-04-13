@@ -44,7 +44,7 @@ class SecurityAuditor:
     def audit_all(self) -> List[SecurityIssue]:
         """Audit all Python files."""
         for py_file in self.src_path.rglob("*.py"):
-            if "cankao" in str(py_file):
+            if "__pycache__" in str(py_file):
                 continue
             self.audit_file(py_file)
         return self.issues

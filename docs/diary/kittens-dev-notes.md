@@ -79,7 +79,7 @@ class ThreadManager:
 
 **2026-04-08**
 
-我打听到的消息是～参考项目 clowder-ai 的 Thread 系统可复杂了！
+我调研了一些成熟项目的 Thread 系统设计～
 
 他们有：
 - Session chain（会话链）
@@ -89,7 +89,7 @@ class ThreadManager:
 
 **对比我们的设计：**
 
-| clowder-ai | MeowAI Home (我们) |
+| 企业级方案 | MeowAI Home (我们) |
 |-----------|-------------------|
 | Redis 存储 | JSON 文件（3.1）→ SQLite（3.2） |
 | 完整 session chain | 简单消息列表 |
@@ -98,7 +98,7 @@ class ThreadManager:
 
 **我觉得：**
 
-我们的设计更简单，适合 CLI 场景。clowder-ai 是服务端架构，要考虑高并发，我们不用搞那么复杂。
+我们的设计更简单，适合 CLI 场景。企业级方案要考虑高并发，我们不用搞那么复杂。
 
 但有一点可以学——他们的 `IntentParser`（意图解析），自动判断是 `#ideate` 还是 `#execute`。这个在 Phase 3.3 要实现。
 
@@ -200,7 +200,7 @@ catchphrases = [
 
 **花花的情报收集清单：**
 
-- [ ] clowder-ai 的 thread 实现
+- [ ] Thread 系统的完整实现参考
 - [ ] cat-cafe 项目的协作模式
 - [ ] 其他 AI  CLI 工具的会话管理
 

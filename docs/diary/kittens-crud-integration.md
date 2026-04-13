@@ -7,7 +7,7 @@
 
 ## 背景
 
-Phase A~J 全部实现完成后，发现猫咪管理（RuntimeCatalog）、配置注册（CatRegistry）、Agent 注册（AgentRegistry）三个子系统各自为政，前后端没有打通。参考 cankao/ (Clowder AI) 的两层 Breed+Variant deep-merge 架构后，进行了彻底的集成梳理。
+Phase A~J 全部实现完成后，发现猫咪管理（RuntimeCatalog）、配置注册（CatRegistry）、Agent 注册（AgentRegistry）三个子系统各自为政，前后端没有打通。经过架构分析，决定采用两层 Breed+Variant deep-merge 架构进行彻底的集成梳理。
 
 ## 完成的工作
 

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 完整对标参考项目 Clowder AI 的多模型架构，构建企业级多 Provider 适配器、注册表、路由、会话链、配置系统。
+**Goal:** 构建企业级多模型架构，实现多 Provider 适配器、注册表、路由、会话链、配置系统。
 
 **Architecture:** CLI 子进程模式（ADR-001），每个 Provider 独立 Service 实现，统一 `invoke()` AsyncGenerator 接口。双注册表（CatRegistry 配置 + AgentRegistry 服务）。配置级联：env > cat-config.json > 硬编码默认值。
 

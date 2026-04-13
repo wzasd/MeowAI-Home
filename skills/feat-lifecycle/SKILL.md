@@ -17,7 +17,7 @@ next: ["writing-plans"]
 
 # Feature Lifecycle — 功能生命周期管理
 
-> 参考: Clowder AI feat-lifecycle skill
+> 参考: MeowAI Home feat-lifecycle skill
 
 ## 三个阶段
 

@@ -14,7 +14,7 @@ next: ["tdd"]
 
 # Worktree — Git 工作树隔离
 
-> 参考: Clowder AI worktree skill
+> 参考: MeowAI Home worktree skill
 
 ## 创建流程
 

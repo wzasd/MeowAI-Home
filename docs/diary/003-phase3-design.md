@@ -47,15 +47,15 @@ meowai status  # 显示当前状态
 - `#critique` → 批判性思维标签
 - 自动推断：≥2猫 → ideate, 1猫 → execute
 
-### 与 Clowder AI 的对比
+### 功能对齐情况
 
-| 功能 | Clowder AI | MeowAI Home (Phase 3) |
-|------|------------|----------------------|
-| Thread | ✅ 完整实现 | 🔄 3.1 实现中 |
-| 持久化 | ✅ SQLite | 🔄 3.2 实现 |
-| A2A | ✅ 完整协议 | 🔄 3.3 实现 |
-| MCP | ✅ 回调机制 | 🔄 3.4 实现 |
-| 路由 | ID/名称 | 职位优先 (@dev/@review/@research) |
+| 功能 | MeowAI Home (Phase 3) | 状态 |
+|------|----------------------|------|
+| Thread | 3.1 实现中 | 🔄 |
+| 持久化 | 3.2 实现 | 🔄 |
+| A2A | 3.3 实现 | 🔄 |
+| MCP | 3.4 实现 | 🔄 |
+| 路由 | 职位优先 (@dev/@review/@research) | ✅ |
 
 **差异化设计**：
 1. 职位路由更直观（@dev 比 @opus 更易懂）
@@ -79,7 +79,6 @@ meowai status  # 显示当前状态
 ## 参考
 
 - 设计文档: `docs/superpowers/specs/2026-04-08-meowai-home-phase3-design.md`
-- 参考项目: `cankao/clowder-ai-main/`
 
 ---
 

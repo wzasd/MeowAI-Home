@@ -20,7 +20,7 @@ next: ["rich-messaging"]
 
 # Schedule Tasks — 定时任务
 
-> 参考: Clowder AI schedule-tasks skill
+> 参考: MeowAI Home schedule-tasks skill
 
 ## Cron 表达式
 

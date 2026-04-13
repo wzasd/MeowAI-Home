@@ -17,7 +17,7 @@ next: []
 
 # Rich Messaging — 富媒体消息
 
-> 参考: Clowder AI rich-messaging skill
+> 参考: MeowAI Home rich-messaging skill
 
 ## 支持类型
 

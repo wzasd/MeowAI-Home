@@ -98,21 +98,16 @@ if self._user_queue_has_pending():
 
 ---
 
-## 与 Clowder AI 对比
+## Invocation Engine 实现总结
 
-| 特性 | Clowder AI | MeowAI Home | 状态 |
-|------|-----------|-------------|------|
-| InvocationQueue | ✅ | ✅ | ✅ 对齐 |
-| Per-slot mutex | ✅ | ✅ | ✅ 对齐 |
-| DegradationPolicy | ✅ | ✅ | ✅ 对齐 |
-| EventAuditLog | ✅ | ✅ | ✅ 对齐 |
-| Worklist routing | ✅ | ✅ | ✅ 对齐 |
+核心特性全部实现：
+- InvocationQueue — 请求队列
+- Per-slot mutex — 防并发
+- DegradationPolicy — 降级策略
+- EventAuditLog — 调用审计
+- Worklist routing — 工作列表路由
 
-**代码量对比:**
-- Clowder AI: 377K 行
-- MeowAI Home: 19.3K → 20K 行 (Invocation Engine 增加 ~630 行)
-
-**功能差距已缩小，保持 1/20 代码量实现 90%+ 功能对齐。**
+代码量: ~630 行新增
 
 ---
 

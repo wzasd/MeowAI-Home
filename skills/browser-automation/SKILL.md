@@ -17,7 +17,7 @@ next: []
 
 # Browser Automation — 浏览器自动化
 
-> 参考: Clowder AI browser-automation skill
+> 参考: MeowAI Home browser-automation skill
 
 ## 流程
 

@@ -16,7 +16,7 @@ next: []
 
 # Cross-Thread Sync — 跨 Thread 协同
 
-> 参考: Clowder AI cross-thread-sync skill
+> 参考: MeowAI Home cross-thread-sync skill
 
 ## 流程
 

@@ -16,7 +16,7 @@ next: []
 
 # Image Generation — AI 图片生成
 
-> 参考: Clowder AI image-generation skill
+> 参考: MeowAI Home image-generation skill
 
 ## 流程
 

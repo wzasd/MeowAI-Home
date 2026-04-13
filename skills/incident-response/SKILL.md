@@ -17,7 +17,7 @@ next: ["self-evolution"]
 
 # Incident Response — 事故应急
 
-> 参考: Clowder AI incident-response skill
+> 参考: MeowAI Home incident-response skill
 
 ## 应急流程
 

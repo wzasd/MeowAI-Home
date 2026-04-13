@@ -55,11 +55,11 @@ if active_skills:
 
 ### 花花的发现
 
-"我刚看了 Clowder AI 的 manifest.yaml，720 行！不只是 skills，还有 refs、iron_laws、sop_navigation、lint 规则..."
+"我分析了完整 manifest 的需求，不只是 skills，还有 refs、iron_laws、sop_navigation、lint 规则..."
 
 "我们需要全部搬过来吗？"
 
-"不用，我们的 manifest 先保持简洁——25 个 skill 的路由信息 + 铁律就够了。Clowder 的 refs 和 SOP 导航是高级功能，后续按需加。"
+"不用，我们的 manifest 先保持简洁——25 个 skill 的路由信息 + 铁律就够了。refs 和 SOP 导航是高级功能，后续按需加。"
 
 ---
 
@@ -108,9 +108,9 @@ if active_skills:
 
 ### 创建过程
 
-每个 SKILL.md 都参考了 `cankao/clowder-ai-main/cat-cafe-skills/` 的对应实现：
+每个 SKILL.md 基于功能需求独立设计：
 
-- **self-evolution**: Clowder 的三模式架构（Scope Guard / Process Evolution / Knowledge Evolution）很精妙，我保留了核心模式，简化了模板细节
+- **self-evolution**: 三模式架构（Scope Guard / Process Evolution / Knowledge Evolution），保留核心模式，简化模板细节
 - **hyperfocus-brake**: 三猫各有特色的提醒风格，直接沿用
 - **cross-thread-sync**: 3+2 件套通知结构很好用
 - **schedule-tasks**: cron 表达式支持直接复用

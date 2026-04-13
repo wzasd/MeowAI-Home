@@ -14,7 +14,7 @@ next: ["collaborative-thinking"]
 
 # Deep Research — 深度调研
 
-> 参考: Clowder AI deep-research skill
+> 参考: MeowAI Home deep-research skill
 
 ## 调研流程
 

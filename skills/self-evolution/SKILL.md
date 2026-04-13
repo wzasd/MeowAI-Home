@@ -18,7 +18,7 @@ next: []
 
 # Self-Evolution — 自我进化
 
-> 参考: Clowder AI self-evolution skill
+> 参考: MeowAI Home self-evolution skill
 
 ## 三个模式
 

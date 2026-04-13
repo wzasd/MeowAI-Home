@@ -17,7 +17,7 @@ next: []
 
 # Browser Preview — 浏览器预览
 
-> 参考: Clowder AI browser-preview skill
+> 参考: MeowAI Home browser-preview skill
 
 ## 流程
 

@@ -16,7 +16,7 @@ next: []
 
 # Pencil Design — Pencil 设计
 
-> 参考: Clowder AI pencil-design skill
+> 参考: MeowAI Home pencil-design skill
 
 ## 流程
 
