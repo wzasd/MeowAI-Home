@@ -25,6 +25,7 @@ docs/*
 !docs/superpowers/
 
 # Reference code (third-party) - excluded from tracking
+cankao/
 
 # Documentation site
 docs-site/node_modules/

@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
+import time
 
 
 class SessionStatus(str, Enum):
@@ -15,6 +16,7 @@ class SessionRecord:
     session_id: str
     status: SessionStatus = SessionStatus.ACTIVE
     consecutive_restore_failures: int = 0
+    created_at: float = field(default_factory=time.time)
 
 
 class SessionChain:

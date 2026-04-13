@@ -63,10 +63,32 @@ export const api = {
         session_id: string;
         cat_id: string;
         cat_name: string;
-        status: "active" | "sealing" | "sealed";
+        status: "active" | "sealed";
         created_at: number;
-        seal_started_at?: number;
+        consecutive_restore_failures: number;
       }>>(`/api/threads/${id}/sessions`),
+  },
+
+  sessions: {
+    get: (sessionId: string) =>
+      request<{
+        session_id: string;
+        cat_id: string;
+        cat_name: string;
+        status: "active" | "sealed";
+        created_at: number;
+        consecutive_restore_failures: number;
+      }>(`/api/sessions/${sessionId}`),
+    seal: (sessionId: string) =>
+      request<{ success: boolean; session_id: string; status: string; message: string }>(
+        `/api/sessions/${sessionId}/seal`,
+        { method: "POST" }
+      ),
+    unseal: (sessionId: string) =>
+      request<{ success: boolean; session_id: string; status: string; message: string }>(
+        `/api/sessions/${sessionId}/unseal`,
+        { method: "POST" }
+      ),
   },
 
   messages: {
