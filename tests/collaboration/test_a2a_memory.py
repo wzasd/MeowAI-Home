@@ -2,13 +2,39 @@
 import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from src.collaboration.a2a_controller import A2AController, CatResponse
 from src.collaboration.intent_parser import IntentResult
 from src.memory import MemoryService
 from src.models.types import AgentMessage, AgentMessageType
 from src.thread.models import Thread
+
+
+class SyncProcessor:
+    """Synchronous processor for tests that runs coroutines immediately."""
+    async def start(self):
+        pass
+
+    async def shutdown(self):
+        pass
+
+    def fire_and_forget(self, coro, name="unnamed"):
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(coro)
+        except RuntimeError:
+            pass
+
+    def run_in_thread(self, fn, *args, name="unnamed"):
+        fn(*args)
+
+
+@pytest.fixture(autouse=True)
+def sync_processor():
+    with patch("src.collaboration.a2a_controller.get_processor", return_value=SyncProcessor()):
+        yield
 
 
 def mock_invoke_stream(items, cat_id="orange", session_id=None):
@@ -60,13 +86,17 @@ class TestAutoStoreConversations:
     async def test_auto_stores_user_and_assistant(self, memory_service, mock_agents, thread):
         """Auto-store saves user message and cat reply to episodic memory"""
         controller = A2AController(
-            mock_agents, memory_service=memory_service
+            mock_agents, memory_service=memory_service, metrics_collector=MagicMock()
         )
         intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="Hello cat")
 
         responses = []
         async for r in controller.execute(intent, "Hello cat", thread):
             responses.append(r)
+
+        # Flush background tasks scheduled by fire_and_forget
+        import asyncio
+        await asyncio.sleep(0)
 
         # Verify episodic memory has stored the conversation
         episodes = memory_service.episodic.recall_by_thread("test-thread")
@@ -78,12 +108,15 @@ class TestAutoStoreConversations:
     async def test_auto_store_importance(self, memory_service, mock_agents, thread):
         """User messages get importance=3, assistant replies get importance=5"""
         controller = A2AController(
-            mock_agents, memory_service=memory_service
+            mock_agents, memory_service=memory_service, metrics_collector=MagicMock()
         )
         intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="Test message")
 
         async for r in controller.execute(intent, "Test message", thread):
             pass
+
+        import asyncio
+        await asyncio.sleep(0)
 
         episodes = memory_service.episodic.recall_by_thread("test-thread")
         user_eps = [e for e in episodes if e["role"] == "user"]
@@ -119,7 +152,7 @@ class TestAutoRetrieveMemory:
         mock_agents[0]["service"].invoke = recorder
 
         controller = A2AController(
-            mock_agents, memory_service=memory_service
+            mock_agents, memory_service=memory_service, metrics_collector=MagicMock()
         )
         intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="React")
 
@@ -138,7 +171,7 @@ class TestAutoRetrieveMemory:
         mock_agents[0]["service"].invoke = recorder
 
         controller = A2AController(
-            mock_agents, memory_service=memory_service
+            mock_agents, memory_service=memory_service, metrics_collector=MagicMock()
         )
         intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="Hello")
 
@@ -158,11 +191,14 @@ class TestAutoExtractEntities:
         service.invoke = mock_invoke_stream([text_msg("OK React is nice", "orange")], "orange")
         agents = [{"service": service, "name": "Orange", "breed_id": "orange"}]
 
-        controller = A2AController(agents, memory_service=memory_service)
+        controller = A2AController(agents, memory_service=memory_service, metrics_collector=MagicMock())
         intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="用户喜欢React")
 
         async for r in controller.execute(intent, "用户喜欢React", thread):
             pass
+
+        import asyncio
+        await asyncio.sleep(0)
 
         entity = memory_service.semantic.get_entity("React")
         assert entity is not None
@@ -176,11 +212,14 @@ class TestAutoExtractEntities:
         service.invoke = mock_invoke_stream([text_msg("OK", "orange")], "orange")
         agents = [{"service": service, "name": "Orange", "breed_id": "orange"}]
 
-        controller = A2AController(agents, memory_service=memory_service)
+        controller = A2AController(agents, memory_service=memory_service, metrics_collector=MagicMock())
         intent = IntentResult(intent="execute", explicit=True, prompt_tags=[], clean_message="Hello there")
 
         async for r in controller.execute(intent, "Hello there", thread):
             pass
+
+        import asyncio
+        await asyncio.sleep(0)
 
         results = memory_service.semantic.search_entities("Hello")
         assert len(results) == 0

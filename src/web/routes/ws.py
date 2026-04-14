@@ -128,15 +128,26 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
 
         workflow_cat_ids = []
         log.info("Starting controller.execute: agents=%s intent=%s", [a["breed_id"] for a in agents], intent.intent)
+
+        # Accumulate streaming content per cat for persistence
+        accumulated: dict = {}
+
         async for response in controller.execute(intent, intent.clean_message, thread):
             log.debug("Yielded response: cat=%s is_final=%s content_len=%d", response.cat_id, response.is_final, len(response.content))
+            acc = accumulated.setdefault(response.cat_id, {"content": "", "thinking": "", "targetCats": None})
+
             if response.thinking:
+                acc["thinking"] = response.thinking
                 await websocket.send_json({
                     "type": "thinking",
                     "cat_id": response.cat_id,
                     "cat_name": response.cat_name,
                     "content": response.thinking,
                 })
+
+            acc["content"] += response.content
+            if response.targetCats is not None:
+                acc["targetCats"] = response.targetCats
 
             await websocket.send_json({
                 "type": "cat_response",
@@ -153,11 +164,11 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
             if response.is_final:
                 assistant_msg = Message(
                     role="assistant",
-                    content=response.content,
+                    content=acc["content"],
                     cat_id=response.cat_id,
-                    thinking=response.thinking,
+                    thinking=acc["thinking"] or None,
                 )
-                thread.add_message("assistant", response.content, cat_id=response.cat_id)
+                thread.add_message("assistant", acc["content"], cat_id=response.cat_id)
                 await tm.add_message(thread.id, assistant_msg)
 
         await tm.update_thread(thread)

@@ -39,9 +39,11 @@ async def test_parallel_ideate(mock_agents):
     responses = []
     async for response in controller.execute(intent, "测试", thread):
         responses.append(response)
-    assert len(responses) == 2
-    assert any(r.cat_id == "orange" for r in responses)
-    assert any(r.cat_id == "inky" for r in responses)
+    # Streaming yields partial chunks + final markers per cat
+    finals = [r for r in responses if r.is_final]
+    assert len(finals) == 2
+    assert any(r.cat_id == "orange" for r in finals)
+    assert any(r.cat_id == "inky" for r in finals)
 
 
 @pytest.mark.asyncio
@@ -52,9 +54,10 @@ async def test_serial_execute(mock_agents):
     responses = []
     async for response in controller.execute(intent, "测试", thread):
         responses.append(response)
-    assert len(responses) == 2
-    assert responses[0].cat_id == "orange"
-    assert responses[1].cat_id == "inky"
+    finals = [r for r in responses if r.is_final]
+    assert len(finals) == 2
+    assert finals[0].cat_id == "orange"
+    assert finals[1].cat_id == "inky"
 
 
 @pytest.mark.asyncio
@@ -69,8 +72,9 @@ async def test_mcp_callback_integration(mock_agents):
     responses = []
     async for response in controller.execute(intent, "测试", thread):
         responses.append(response)
-    assert responses[0].targetCats == ["inky"]
-    assert "targetCats" not in responses[0].content
+    final_orange = [r for r in responses if r.is_final and r.cat_id == "orange"][0]
+    assert final_orange.targetCats == ["inky"]
+    assert "targetCats" not in final_orange.content
 
 
 @pytest.mark.asyncio
@@ -85,5 +89,6 @@ async def test_target_cats_routing(mock_agents):
     responses = []
     async for response in controller.execute(intent, "测试", thread):
         responses.append(response)
-    assert len(responses) == 2
-    assert responses[1].cat_id == "inky"
+    finals = [r for r in responses if r.is_final]
+    assert len(finals) == 2
+    assert finals[1].cat_id == "inky"
