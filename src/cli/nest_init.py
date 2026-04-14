@@ -59,7 +59,6 @@ def run_nest_init(interactive: bool = True) -> None:
         if warnings:
             for w in warnings:
                 click.echo(f"  ⚠️ {w}")
-        save_nest_config(config_path, cfg)
         try:
             block = _build_cats_block(cfg.cats, cat_registry)
             write_neowai_block(claude_md_path, block)

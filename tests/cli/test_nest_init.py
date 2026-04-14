@@ -44,6 +44,13 @@ def test_run_nest_init_creates_nest(tmp_path: Path, monkeypatch) -> None:
         assert "<!-- NEOWAI-CATS-START -->" in claude_md
         assert "<!-- NEOWAI-CATS-END -->" in claude_md
         assert "阿橘" in claude_md
+        assert "dev" in claude_md
+        assert "活泼" in claude_md
+        assert "chat" in claude_md
+
+        from src.config.nest_registry import NestRegistry
+        registry = NestRegistry()
+        assert registry.is_registered(str(tmp_path))
     finally:
         os.chdir(old_cwd)
 
