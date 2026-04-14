@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useCatStore } from "../../stores/catStore";
 import { Shield, Check, X } from "lucide-react";
 
@@ -27,6 +28,42 @@ const RISK_COLORS = {
 
 export function PermissionsSettings() {
   const cats = useCatStore((s) => s.cats);
+  const updateCat = useCatStore((s) => s.updateCat);
+  const fetchCats = useCatStore((s) => s.fetchCats);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const handleToggle = async (catId: string, permId: string, riskLevel: string) => {
+    const cat = cats.find((c) => c.id === catId);
+    if (!cat) return;
+
+    const currentPerms = cat.permissions || [];
+    const wouldEnable = !currentPerms.includes(permId);
+
+    // High risk permission needs confirmation
+    if (wouldEnable && riskLevel === "high") {
+      const catName = cat.displayName || cat.name;
+      const perm = PERMISSIONS.find((p) => p.id === permId);
+      const confirmed = window.confirm(`确定要为「${catName}」启用高风险权限「${perm?.name}」吗？`);
+      if (!confirmed) return;
+    }
+
+    const newPerms = wouldEnable
+      ? [...currentPerms, permId]
+      : currentPerms.filter((p) => p !== permId);
+
+    const key = `${catId}:${permId}`;
+    setToggling(key);
+    try {
+      await updateCat(catId, { permissions: newPerms });
+      await fetchCats();
+    } catch (err) {
+      console.error("Failed to update permissions:", err);
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const displayCats = cats.slice(0, 5);
 
   return (
     <div className="space-y-4">
@@ -40,7 +77,7 @@ export function PermissionsSettings() {
             <tr className="border-b border-gray-200 text-xs text-gray-500 dark:border-gray-700">
               <th className="px-3 py-2 text-left">权限</th>
               <th className="px-3 py-2 text-left">风险</th>
-              {cats.slice(0, 5).map((cat) => (
+              {displayCats.map((cat) => (
                 <th key={cat.id} className="px-3 py-2 text-center">
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{cat.displayName || cat.name}</span>
                 </th>
@@ -61,13 +98,20 @@ export function PermissionsSettings() {
                     {perm.riskLevel === "low" ? "低" : perm.riskLevel === "medium" ? "中" : "高"}
                   </span>
                 </td>
-                {cats.slice(0, 5).map((cat) => {
-                  // Default: low risk = enabled, medium = enabled, high = disabled
-                  const enabled = perm.riskLevel !== "high";
+                {displayCats.map((cat) => {
+                  const enabled = cat.permissions?.includes(perm.id) ?? false;
+                  const key = `${cat.id}:${perm.id}`;
+                  const isToggling = toggling === key;
                   return (
                     <td key={cat.id} className="px-3 py-2 text-center">
                       <button
-                        className={`rounded p-1 ${enabled ? "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20" : "text-gray-300 hover:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-700"}`}
+                        onClick={() => handleToggle(cat.id, perm.id, perm.riskLevel)}
+                        disabled={isToggling}
+                        className={`rounded p-1 transition-colors ${
+                          enabled
+                            ? "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            : "text-gray-300 hover:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-700"
+                        } ${isToggling ? "opacity-40" : ""}`}
                       >
                         {enabled ? <Check size={16} /> : <X size={16} />}
                       </button>

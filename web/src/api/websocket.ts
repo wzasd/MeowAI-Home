@@ -17,6 +17,7 @@ export class WSManager {
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
+      console.log("[WS] Connected to", url);
       this.retries = 0;
     };
 
@@ -62,6 +63,7 @@ export class WSManager {
   }
 
   send(content: string) {
+    console.log("[WS] send() called, readyState=", this.ws?.readyState);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "send_message", content }));
     }

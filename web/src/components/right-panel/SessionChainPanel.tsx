@@ -34,6 +34,16 @@ export function SessionChainPanel({ threadId }: { threadId: string | null }) {
 
   useEffect(() => {
     loadSessions();
+
+    // Listen for session created events from WebSocket
+    const handleSessionCreated = () => {
+      loadSessions();
+    };
+    window.addEventListener("meowai:session_created", handleSessionCreated);
+
+    return () => {
+      window.removeEventListener("meowai:session_created", handleSessionCreated);
+    };
   }, [loadSessions]);
 
   const handleSeal = async (sessionId: string) => {

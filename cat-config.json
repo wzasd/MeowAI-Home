@@ -16,6 +16,9 @@
       "catchphrases": ["这个我熟！", "包在我身上！"],
       "provider": "anthropic",
       "defaultModel": "claude-opus-4-6",
+      "accountRef": "builtin-anthropic",
+      "capabilities": ["code_gen", "code_review", "chat", "git_ops", "security_scan", "cost_analysis"],
+      "permissions": ["write_file", "network_access", "read_all_threads", "send_notification", "invoke_other_cats"],
       "cli": {
         "command": "claude",
         "outputFormat": "stream-json",
@@ -36,6 +39,9 @@
       "catchphrases": ["……这行有问题。", "重写。"],
       "provider": "anthropic",
       "defaultModel": "claude-sonnet-4-6",
+      "accountRef": "builtin-anthropic",
+      "capabilities": ["code_gen", "code_review", "chat", "git_ops", "security_scan", "cost_analysis"],
+      "permissions": ["write_file", "network_access", "read_all_threads", "send_notification", "invoke_other_cats"],
       "cli": {
         "command": "claude",
         "outputFormat": "stream-json",
@@ -56,6 +62,9 @@
       "catchphrases": ["我打听到的消息是…", "要不要试试这个？"],
       "provider": "anthropic",
       "defaultModel": "claude-sonnet-4-6",
+      "accountRef": "builtin-anthropic",
+      "capabilities": ["code_gen", "code_review", "chat", "git_ops", "security_scan", "cost_analysis"],
+      "permissions": ["write_file", "network_access", "read_all_threads", "send_notification", "invoke_other_cats"],
       "cli": {
         "command": "claude",
         "outputFormat": "stream-json",

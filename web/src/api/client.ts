@@ -11,6 +11,9 @@ import type {
   ConnectorBindingStatus,
   ConnectorQrResponse,
   EnvVarListResponse,
+  AccountListResponse,
+  AccountResponse,
+  TestKeyResponse,
 } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -154,6 +157,8 @@ export const api = {
       defaultModel?: string;
       personality?: string;
       mentionPatterns?: string[];
+      capabilities?: string[];
+      permissions?: string[];
     }) =>
       request<CatDetailResponse>(`/api/cats/${id}`, {
         method: "PATCH",
@@ -205,5 +210,47 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ value }),
       }),
+    accounts: {
+      list: () => request<AccountListResponse>("/api/config/accounts"),
+      create: (data: {
+        id: string; displayName: string; protocol: string; authType: string;
+        baseUrl?: string; models?: string[]; apiKey?: string;
+      }) => request<AccountResponse>("/api/config/accounts", {
+        method: "POST", body: JSON.stringify(data),
+      }),
+      get: (id: string) => request<AccountResponse>(`/api/config/accounts/${id}`),
+      update: (id: string, data: Record<string, unknown>) =>
+        request<AccountResponse>(`/api/config/accounts/${id}`, {
+          method: "PATCH", body: JSON.stringify(data),
+        }),
+      delete: (id: string) => request<{ success: boolean }>(`/api/config/accounts/${id}`, {
+        method: "DELETE",
+      }),
+      testKey: (accountId: string, apiKey: string, protocol: string, baseUrl?: string) =>
+        request<TestKeyResponse>(`/api/config/accounts/${accountId}/test-key`, {
+          method: "POST", body: JSON.stringify({ apiKey, protocol, baseUrl }),
+        }),
+      bindCat: (catId: string, accountRef: string) =>
+        request<{ success: boolean }>("/api/config/accounts/bind-cat", {
+          method: "PATCH", body: JSON.stringify({ catId, accountRef }),
+        }),
+    },
+  },
+
+  metrics: {
+    cat: (catId: string, days?: number) =>
+      request<{ cat_id: string; days: number; data: any[] }>(`/api/metrics/cats?cat_id=${catId}&days=${days ?? 7}`),
+    leaderboard: (days?: number) =>
+      request<{ days: number; leaderboard: any[] }>(`/api/metrics/leaderboard?days=${days ?? 7}`),
+  },
+
+  governance: {
+    listProjects: () => request<{ projects: any[] }>("/api/governance/projects"),
+    addProject: (data: { project_path: string; status?: string; version?: string; findings?: any[]; confirmed?: boolean }) =>
+      request<{ success: boolean }>("/api/governance/projects", { method: "POST", body: JSON.stringify(data) }),
+    deleteProject: (projectPath: string) =>
+      request<{ success: boolean }>(`/api/governance/projects/${encodeURIComponent(projectPath)}`, { method: "DELETE" }),
+    confirmProject: (projectPath: string) =>
+      request<{ success: boolean }>("/api/governance/confirm", { method: "POST", body: JSON.stringify({ project_path: projectPath }) }),
   },
 };

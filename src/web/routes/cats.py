@@ -27,6 +27,9 @@ def _cat_to_dict(cat_id: str, config: CatConfig, registry) -> Dict:
         "isAvailable": registry.is_available(cat_id),
         "roles": registry.get_roles(cat_id),
         "evaluation": registry.get_evaluation(cat_id),
+        "accountRef": config.account_ref,
+        "capabilities": config.capabilities,
+        "permissions": config.permissions,
     }
 
 
@@ -226,6 +229,10 @@ async def update_cat(
             update_kwargs["displayName"] = body["displayName"]
         if new_mentions is not None:
             update_kwargs["mention_patterns"] = new_mentions
+        if "capabilities" in body:
+            update_kwargs["capabilities"] = body["capabilities"]
+        if "permissions" in body:
+            update_kwargs["permissions"] = body["permissions"]
         if update_kwargs:
             catalog.update_cat(cat_id, **update_kwargs)
     else:
@@ -238,6 +245,8 @@ async def update_cat(
             default_model=body.get("defaultModel", config.default_model),
             personality=body.get("personality", config.personality),
             displayName=body.get("displayName", config.display_name),
+            capabilities=body.get("capabilities", config.capabilities),
+            permissions=body.get("permissions", config.permissions),
         )
 
     # Apply updates to live CatConfig
@@ -261,6 +270,10 @@ async def update_cat(
         for p in new_mentions:
             registry._mention_index[p.lower().lstrip("@")] = cat_id
             registry._mention_index[p.lower()] = cat_id
+    if "capabilities" in body:
+        config.capabilities = body["capabilities"]
+    if "permissions" in body:
+        config.permissions = body["permissions"]
 
     # Refresh provider if provider/model changed
     if body.get("provider") or body.get("defaultModel"):

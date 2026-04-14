@@ -391,7 +391,7 @@ def chat(cat: str, thread_id: str, resume: bool):
             click.echo(f"   历史消息: {len(thread.messages)}条")
         else:
             click.echo("暂无历史会话，创建新 thread...")
-            thread = run_async(manager.create("默认会话"))
+            thread = run_async(manager.create("默认会话", project_path=str(Path.cwd())))
             manager.switch(thread.id)
     elif thread_id:
         thread = run_async(manager.get(thread_id))
@@ -403,7 +403,7 @@ def chat(cat: str, thread_id: str, resume: bool):
         thread = manager.get_current()
         if not thread:
             click.echo("🐱 还没有 thread，正在创建...")
-            thread = run_async(manager.create("默认会话"))
+            thread = run_async(manager.create("默认会话", project_path=str(Path.cwd())))
             manager.switch(thread.id)
 
     # 解析 cat mention → cat_id
@@ -505,14 +505,19 @@ def chat(cat: str, thread_id: str, resume: bool):
                     ):
                         cfg = cat_reg.try_get(response.cat_id)
                         name = cfg.display_name if cfg else response.cat_name
-                        click.echo(f"\n{name}: {response.content}\n")
+                        # Stream incremental chunks for typing effect
+                        click.echo(f"\n{name}: ", nl=False)
+                        click.echo(response.content, nl=False)
 
-                        thread.add_message(
-                            "assistant",
-                            response.content,
-                            cat_id=response.cat_id
-                        )
-                        await manager.add_message(thread.id, thread.messages[-1])
+                        # Only persist final response to database
+                        if getattr(response, 'is_final', False):
+                            click.echo()  # New line after final chunk
+                            thread.add_message(
+                                "assistant",
+                                response.content,
+                                cat_id=response.cat_id
+                            )
+                            await manager.add_message(thread.id, thread.messages[-1])
 
                 run_async(run_collaboration())
                 run_async(manager.update_thread(thread))

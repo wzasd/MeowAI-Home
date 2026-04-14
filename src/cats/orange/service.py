@@ -2,8 +2,8 @@ import os
 import tempfile
 from typing import AsyncIterator, Optional
 from ..base import AgentService
-from src.utils.ndjson import parse_ndjson_stream
-from src.utils.process import run_cli_command
+from src.utils.ndjson import parse_ndjson_stream_iter
+from src.utils.process import run_cli_command, run_cli_command_stream
 
 
 class OrangeService(AgentService):
@@ -17,7 +17,7 @@ class OrangeService(AgentService):
         return "".join(chunks)
 
     async def chat_stream(self, message: str, system_prompt: Optional[str] = None) -> AsyncIterator[str]:
-        """Stream response with real CLI invocation"""
+        """Stream response with real CLI invocation - true streaming"""
         # 1. Build system prompt
         if system_prompt is None:
             system_prompt = self.build_system_prompt()
@@ -30,33 +30,45 @@ class OrangeService(AgentService):
         temp_file.close()
 
         try:
-            # 3. Build CLI command
+            # 3. Build CLI command with stream-json output
             cmd = self.cli_config["command"]
             args = self.cli_config.get("defaultArgs", []).copy()
             args.extend([
                 "--append-system-prompt-file", temp_file.name,
+                "--output-format", "stream-json",
+                "--include-partial-messages",
                 message
             ])
 
-            # 4. Execute CLI
-            result = await run_cli_command(
-                command=cmd,
-                args=args,
-                timeout=300.0
-            )
-
-            # 5. Parse NDJSON
-            async for event in parse_ndjson_stream(result["stdout"]):
-                if isinstance(event, dict) and event.get("type") == "assistant":
-                    message_data = event.get("message", {})
-                    content = message_data.get("content", [])
-
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            text = block.get("text", "")
-                            if text:
-                                yield text
+            # 4. Stream CLI output in real-time
+            async for line in run_cli_command_stream(cmd, args, timeout=300.0):
+                # Parse each NDJSON line immediately
+                if not line.strip():
+                    continue
+                try:
+                    import json
+                    event = json.loads(line)
+                    if event.get("type") == "stream_event":
+                        # Handle partial streaming events
+                        stream_event = event.get("event", {})
+                        if stream_event.get("type") == "content_block_delta":
+                            delta = stream_event.get("delta", {})
+                            if delta.get("type") == "text_delta":
+                                text = delta.get("text", "")
+                                if text:
+                                    yield text
+                    elif event.get("type") == "assistant":
+                        # Handle final assistant message
+                        message_data = event.get("message", {})
+                        content = message_data.get("content", [])
+                        for block in content:
+                            if block.get("type") == "text":
+                                text = block.get("text", "")
+                                if text:
+                                    yield text
+                except json.JSONDecodeError:
+                    continue
         finally:
-            # 6. Clean up temp file
+            # 5. Clean up temp file
             if os.path.exists(temp_file.name):
                 os.unlink(temp_file.name)

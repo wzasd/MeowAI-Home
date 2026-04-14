@@ -47,3 +47,25 @@ def resolve_runtime_env(
             env[env_map["url"]] = base_url
 
     return env
+
+
+def resolve_account_env(account_id: str, provider: str) -> Dict[str, str]:
+    """Resolve environment variables for a given account.
+
+    1. Look up account in AccountStore
+    2. If authType == subscription: strip API key env vars
+    3. If authType == api_key: fetch credential, inject as env var
+    4. If baseUrl set: inject base URL env var
+    """
+    from src.config.account_store import get_account_store
+
+    store = get_account_store()
+    account = store._accounts.get(account_id)
+    if not account:
+        return {}
+
+    auth_type = AuthMode(account.get("authType", "subscription"))
+    api_key = store.get_credential(account_id) if auth_type == AuthMode.API_KEY else None
+    base_url = account.get("baseUrl")
+
+    return resolve_runtime_env(provider, auth_type, api_key=api_key, base_url=base_url)

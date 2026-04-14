@@ -1,5 +1,7 @@
 """WebSocket endpoint for streaming agent responses."""
 
+import logging
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.collaboration.a2a_controller import A2AController
@@ -11,6 +13,7 @@ from src.workflow.templates import WorkflowTemplateFactory
 
 router = APIRouter()
 manager = ConnectionManager()
+log = logging.getLogger(__name__)
 
 
 @router.websocket("/ws/{thread_id}")
@@ -25,6 +28,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     try:
         while True:
             data = await websocket.receive_json()
+            log.warning("WS RECV thread=%s type=%s", thread_id, data.get("type"))
 
             if data.get("type") == "send_message":
                 await _handle_send_message(
@@ -41,6 +45,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
 async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app):
     content = data.get("content", "").strip()
+    log.info("WS received send_message: thread=%s content=%.80s", thread_id, content)
     if not content:
         await websocket.send_json({"type": "error", "message": "Empty message"})
         return
@@ -101,12 +106,17 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
 
         memory_service = getattr(app.state, "memory_service", None)
 
+        # Define broadcast callback for session events
+        async def broadcast_session(data: dict):
+            await manager.broadcast(thread_id, data)
+
         controller = A2AController(
             agents,
             session_chain=session_chain,
             dag_executor=dag_executor,
             template_factory=template_factory,
             memory_service=memory_service,
+            broadcast_callback=broadcast_session,
         )
 
         if intent.workflow:
@@ -117,7 +127,9 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
             })
 
         workflow_cat_ids = []
+        log.info("Starting controller.execute: agents=%s intent=%s", [a["breed_id"] for a in agents], intent.intent)
         async for response in controller.execute(intent, intent.clean_message, thread):
+            log.debug("Yielded response: cat=%s is_final=%s content_len=%d", response.cat_id, response.is_final, len(response.content))
             if response.thinking:
                 await websocket.send_json({
                     "type": "thinking",
@@ -137,14 +149,16 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
             if intent.workflow:
                 workflow_cat_ids.append(response.cat_id)
 
-            assistant_msg = Message(
-                role="assistant",
-                content=response.content,
-                cat_id=response.cat_id,
-                thinking=response.thinking,
-            )
-            thread.add_message("assistant", response.content, cat_id=response.cat_id)
-            await tm.add_message(thread.id, assistant_msg)
+            # Only persist final response to database
+            if response.is_final:
+                assistant_msg = Message(
+                    role="assistant",
+                    content=response.content,
+                    cat_id=response.cat_id,
+                    thinking=response.thinking,
+                )
+                thread.add_message("assistant", response.content, cat_id=response.cat_id)
+                await tm.add_message(thread.id, assistant_msg)
 
         await tm.update_thread(thread)
 
@@ -172,4 +186,5 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
             await websocket.send_json({"type": "done"})
 
     except Exception as e:
+        log.exception("Error in agent execution: %s", e)
         await websocket.send_json({"type": "error", "message": str(e)})

@@ -1,6 +1,6 @@
 /** React hook for WebSocket connection to a thread. */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { WSManager } from "../api/websocket";
 import { useThreadStore } from "../stores/threadStore";
 import { useChatStore } from "../stores/chatStore";
@@ -9,6 +9,8 @@ import type { MessageResponse } from "../types";
 export function useWebSocket() {
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const wsRef = useRef<WSManager | null>(null);
+  const connectedIdRef = useRef<string | null>(null);
+  const mountedRef = useRef(false);
 
   const addLocalMessage = useChatStore((s) => s.addLocalMessage);
   const addStreamingResponse = useChatStore((s) => s.addStreamingResponse);
@@ -18,21 +20,37 @@ export function useWebSocket() {
   const setSkill = useChatStore((s) => s.setSkill);
   const setIntentMode = useChatStore((s) => s.setIntentMode);
 
+  // Track first mount (skip Strict Mode double-fire)
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   useEffect(() => {
     if (!currentThreadId) return;
 
+    // Skip reconnect if already connected to this exact thread
+    if (connectedIdRef.current === currentThreadId && wsRef.current?.isConnected) {
+      return;
+    }
+
+    // Disconnect previous
+    if (wsRef.current) {
+      wsRef.current.disconnect();
+      wsRef.current = null;
+      connectedIdRef.current = null;
+    }
+
     const ws = new WSManager();
     wsRef.current = ws;
+    connectedIdRef.current = currentThreadId;
 
-    // Listen for WS events
     ws.on("message_sent", (data) => {
       addLocalMessage(data.message as MessageResponse);
     });
-
     ws.on("intent_mode", (data) => {
       setIntentMode(data.mode as string);
     });
-
     ws.on("cat_response", (data) => {
       addStreamingResponse(data.cat_id as string, {
         catId: data.cat_id as string,
@@ -41,20 +59,19 @@ export function useWebSocket() {
         targetCats: data.target_cats as string[] | null,
       });
     });
-
     ws.on("skill_activated", (data) => {
       setSkill(data.skill_name as string);
     });
-
     ws.on("thinking", (data) => {
       addStreamingThinking(data.cat_id as string, data.content as string);
     });
-
     ws.on("done", () => {
       stopStreaming();
       fetchMessages(currentThreadId);
     });
-
+    ws.on("session_created", () => {
+      window.dispatchEvent(new CustomEvent("meowai:session_created"));
+    });
     ws.on("error", (data) => {
       console.error("WebSocket error:", data.message);
       stopStreaming();
@@ -62,21 +79,26 @@ export function useWebSocket() {
 
     ws.connect(currentThreadId);
 
-    // Listen for send events from InputBar
+    // DO NOT disconnect on cleanup — prevents React Strict Mode from killing the connection.
+    // The next effect run for a different threadId will disconnect this one above.
+  }, [currentThreadId]);
+
+  // Stable send handler — always uses wsRef
+  useEffect(() => {
     const handleSend = (e: Event) => {
       const { content } = (e as CustomEvent).detail;
-      if (content) {
+      if (!content) return;
+      const ws = wsRef.current;
+      if (ws && ws.isConnected) {
+        console.log("[WS] Sending:", content.substring(0, 60));
         ws.send(content);
+      } else {
+        console.error("[WS] Cannot send - ws=", !!ws, "connected=", ws?.isConnected);
       }
     };
     window.addEventListener("meowai:send", handleSend);
-
-    return () => {
-      ws.disconnect();
-      wsRef.current = null;
-      window.removeEventListener("meowai:send", handleSend);
-    };
-  }, [currentThreadId]);
+    return () => window.removeEventListener("meowai:send", handleSend);
+  }, []);
 
   return wsRef;
 }

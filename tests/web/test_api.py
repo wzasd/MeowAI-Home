@@ -42,7 +42,7 @@ async def test_health_check(app_client):
 @pytest.mark.asyncio
 async def test_create_thread(app_client):
     """Test POST /api/threads."""
-    response = await app_client.post("/api/threads", json={"name": "Test Thread"})
+    response = await app_client.post("/api/threads", json={"name":"Test Thread", "project_path": "/tmp/test"})
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Test Thread"
@@ -56,7 +56,7 @@ async def test_create_thread(app_client):
 async def test_create_thread_custom_cat(app_client):
     """Test POST /api/threads with custom cat."""
     response = await app_client.post(
-        "/api/threads", json={"name": "Patch Thread", "cat_id": "patch"}
+        "/api/threads", json={"name":"Patch Thread", "cat_id": "patch", "project_path": "/tmp/test"}
     )
     assert response.status_code == 200
     assert response.json()["current_cat_id"] == "patch"
@@ -65,8 +65,8 @@ async def test_create_thread_custom_cat(app_client):
 @pytest.mark.asyncio
 async def test_list_threads(app_client):
     """Test GET /api/threads."""
-    await app_client.post("/api/threads", json={"name": "Thread 1"})
-    await app_client.post("/api/threads", json={"name": "Thread 2"})
+    await app_client.post("/api/threads", json={"name":"Thread 1", "project_path": "/tmp/test"})
+    await app_client.post("/api/threads", json={"name":"Thread 2", "project_path": "/tmp/test"})
 
     response = await app_client.get("/api/threads")
     assert response.status_code == 200
@@ -77,7 +77,7 @@ async def test_list_threads(app_client):
 @pytest.mark.asyncio
 async def test_get_thread(app_client):
     """Test GET /api/threads/{id}."""
-    create_resp = await app_client.post("/api/threads", json={"name": "My Thread"})
+    create_resp = await app_client.post("/api/threads", json={"name":"My Thread", "project_path": "/tmp/test"})
     thread_id = create_resp.json()["id"]
 
     response = await app_client.get(f"/api/threads/{thread_id}")
@@ -95,7 +95,7 @@ async def test_get_thread_not_found(app_client):
 @pytest.mark.asyncio
 async def test_rename_thread(app_client):
     """Test PATCH /api/threads/{id}."""
-    create_resp = await app_client.post("/api/threads", json={"name": "Old Name"})
+    create_resp = await app_client.post("/api/threads", json={"name":"Old Name", "project_path": "/tmp/test"})
     thread_id = create_resp.json()["id"]
 
     response = await app_client.patch(
@@ -108,7 +108,7 @@ async def test_rename_thread(app_client):
 @pytest.mark.asyncio
 async def test_delete_thread(app_client):
     """Test DELETE /api/threads/{id}."""
-    create_resp = await app_client.post("/api/threads", json={"name": "To Delete"})
+    create_resp = await app_client.post("/api/threads", json={"name":"To Delete", "project_path": "/tmp/test"})
     thread_id = create_resp.json()["id"]
 
     response = await app_client.delete(f"/api/threads/{thread_id}")
@@ -122,7 +122,7 @@ async def test_delete_thread(app_client):
 @pytest.mark.asyncio
 async def test_archive_thread(app_client):
     """Test POST /api/threads/{id}/archive."""
-    create_resp = await app_client.post("/api/threads", json={"name": "To Archive"})
+    create_resp = await app_client.post("/api/threads", json={"name":"To Archive", "project_path": "/tmp/test"})
     thread_id = create_resp.json()["id"]
 
     response = await app_client.post(f"/api/threads/{thread_id}/archive")
@@ -133,7 +133,7 @@ async def test_archive_thread(app_client):
 @pytest.mark.asyncio
 async def test_get_messages_empty(app_client):
     """Test GET /api/threads/{id}/messages with no messages."""
-    create_resp = await app_client.post("/api/threads", json={"name": "Empty"})
+    create_resp = await app_client.post("/api/threads", json={"name":"Empty", "project_path": "/tmp/test"})
     thread_id = create_resp.json()["id"]
 
     response = await app_client.get(f"/api/threads/{thread_id}/messages")
@@ -146,5 +146,5 @@ async def test_get_messages_empty(app_client):
 @pytest.mark.asyncio
 async def test_thread_validation_empty_name(app_client):
     """Test POST /api/threads rejects empty name."""
-    response = await app_client.post("/api/threads", json={"name": ""})
+    response = await app_client.post("/api/threads", json={"name":""})
     assert response.status_code == 422

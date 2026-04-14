@@ -278,6 +278,12 @@ class RuntimeCatalog:
                 breed["personality"] = cat["personality"]
             if "cli" in cat:
                 breed["cli"] = cat["cli"]
+            if "accountRef" in cat:
+                breed["accountRef"] = cat["accountRef"]
+            if "capabilities" in cat:
+                breed["capabilities"] = cat["capabilities"]
+            if "permissions" in cat:
+                breed["permissions"] = cat["permissions"]
 
             breeds.append(breed)
 

@@ -23,9 +23,30 @@ const CAPABILITY_GROUPS = [
 
 export function CapabilitySettings() {
   const cats = useCatStore((s) => s.cats);
+  const updateCat = useCatStore((s) => s.updateCat);
+  const fetchCats = useCatStore((s) => s.fetchCats);
   const [selectedCat, setSelectedCat] = useState<string | null>(cats[0]?.id || null);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const cat = cats.find((c) => c.id === selectedCat);
+
+  const handleToggle = async (capId: string) => {
+    if (!cat) return;
+    const currentCaps = cat.capabilities || [];
+    const newCaps = currentCaps.includes(capId)
+      ? currentCaps.filter((c) => c !== capId)
+      : [...currentCaps, capId];
+
+    setToggling(capId);
+    try {
+      await updateCat(cat.id, { capabilities: newCaps });
+      await fetchCats();
+    } catch (err) {
+      console.error("Failed to update capabilities:", err);
+    } finally {
+      setToggling(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -60,15 +81,18 @@ export function CapabilitySettings() {
               <div className="grid gap-2 sm:grid-cols-2">
                 {group.items.map((cap) => {
                   const Icon = cap.icon;
-                  const enabled = true; // Default all enabled for demo
+                  const enabled = cat.capabilities?.includes(cap.id) ?? false;
+                  const isToggling = toggling === cap.id;
                   return (
-                    <div
+                    <button
                       key={cap.id}
-                      className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                      onClick={() => handleToggle(cap.id)}
+                      disabled={isToggling}
+                      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
                         enabled
                           ? "border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-900/10"
                           : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
-                      }`}
+                      } ${isToggling ? "opacity-60" : "cursor-pointer hover:shadow-sm"}`}
                     >
                       <Icon size={16} className={`mt-0.5 ${enabled ? "text-green-600" : "text-gray-400"}`} />
                       <div className="flex-1">
@@ -86,7 +110,7 @@ export function CapabilitySettings() {
                         </div>
                         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{cap.desc}</p>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

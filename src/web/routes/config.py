@@ -176,3 +176,147 @@ async def delete_runtime_cat(cat_id: str) -> Dict:
         "success": True,
         "message": f"Cat {cat_id} deleted",
     }
+
+
+# ========== Account CRUD ==========
+
+
+class CreateAccountRequest(BaseModel):
+    id: str
+    displayName: str
+    protocol: str
+    authType: str
+    baseUrl: Optional[str] = None
+    models: Optional[List[str]] = None
+    apiKey: Optional[str] = None
+
+
+class UpdateAccountRequest(BaseModel):
+    displayName: Optional[str] = None
+    authType: Optional[str] = None
+    baseUrl: Optional[str] = None
+    models: Optional[List[str]] = None
+    apiKey: Optional[str] = None
+
+
+class TestKeyRequest(BaseModel):
+    apiKey: str
+    protocol: str
+    baseUrl: Optional[str] = None
+
+
+class BindCatRequest(BaseModel):
+    catId: str
+    accountRef: str
+
+
+@router.get("/accounts")
+async def list_accounts():
+    from src.config.account_store import get_account_store
+    store = get_account_store()
+    return {"accounts": store.list_accounts()}
+
+
+@router.post("/accounts")
+async def create_account(req: CreateAccountRequest):
+    from src.config.account_store import get_account_store
+    store = get_account_store()
+    try:
+        acc = store.create_account(
+            id=req.id, displayName=req.displayName, protocol=req.protocol,
+            authType=req.authType, baseUrl=req.baseUrl, models=req.models,
+            apiKey=req.apiKey,
+        )
+        return acc
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/accounts/{account_id}")
+async def get_account(account_id: str):
+    from src.config.account_store import get_account_store
+    store = get_account_store()
+    acc = store.get_account(account_id)
+    if not acc:
+        raise HTTPException(status_code=404, detail=f"Account not found: {account_id}")
+    return acc
+
+
+@router.patch("/accounts/{account_id}")
+async def update_account(account_id: str, req: UpdateAccountRequest):
+    from src.config.account_store import get_account_store
+    store = get_account_store()
+    try:
+        updates = req.model_dump(exclude_unset=True)
+        return store.update_account(account_id, **updates)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/accounts/{account_id}")
+async def delete_account(account_id: str):
+    from src.config.account_store import get_account_store
+    store = get_account_store()
+    try:
+        store.delete_account(account_id)
+        return {"success": True}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/accounts/{account_id}/test-key")
+async def test_account_key(account_id: str, req: TestKeyRequest):
+    import httpx
+    valid = False
+    error = None
+    try:
+        if req.protocol == "anthropic":
+            base = req.baseUrl or "https://api.anthropic.com"
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{base}/v1/messages",
+                    headers={"x-api-key": req.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                    json={"model": "claude-sonnet-4-6", "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]},
+                    timeout=10.0,
+                )
+                valid = resp.status_code not in (401, 403)
+                if not valid:
+                    try:
+                        error = resp.json().get("error", {}).get("message", "Invalid API key")
+                    except Exception:
+                        error = f"HTTP {resp.status_code}"
+        elif req.protocol == "openai":
+            base = req.baseUrl or "https://api.openai.com"
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{base}/v1/models",
+                    headers={"Authorization": f"Bearer {req.apiKey}"},
+                    timeout=10.0,
+                )
+                valid = resp.status_code == 200
+                if not valid:
+                    error = "Invalid API key"
+        elif req.protocol == "google":
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"https://generativelanguage.googleapis.com/v1beta/models?key={req.apiKey}",
+                    timeout=10.0,
+                )
+                valid = resp.status_code == 200
+                if not valid:
+                    error = "Invalid API key"
+        else:
+            valid = True
+    except Exception as e:
+        valid = False
+        error = str(e)
+    return {"valid": valid, "error": error}
+
+
+@router.patch("/accounts/bind-cat")
+async def bind_cat_to_account(req: BindCatRequest):
+    catalog = get_runtime_catalog()
+    if not catalog.get(req.catId):
+        raise HTTPException(status_code=404, detail=f"Cat '{req.catId}' not found")
+    catalog.update_cat(req.catId, accountRef=req.accountRef)
+    return {"success": True}

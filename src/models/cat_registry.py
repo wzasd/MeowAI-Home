@@ -60,6 +60,9 @@ class CatRegistry:
                     caution=breed.get("caution"),
                     mcp_support=breed.get("mcpSupport", False),
                     effort=cli_config.get("effort", "high"),
+                    account_ref=breed.get("accountRef"),
+                    capabilities=breed.get("capabilities", []),
+                    permissions=breed.get("permissions", []),
                 )
                 self._cats[cat_id] = config
 
@@ -109,6 +112,9 @@ class CatRegistry:
                         caution=breed.get("caution"),
                         mcp_support=variant.get("mcpSupport", False),
                         effort=cli_config.get("effort", "high"),
+                        account_ref=breed.get("accountRef"),
+                        capabilities=variant.get("capabilities", breed.get("capabilities", [])),
+                        permissions=variant.get("permissions", breed.get("permissions", [])),
                     )
                     self._cats[cat_id] = config
 

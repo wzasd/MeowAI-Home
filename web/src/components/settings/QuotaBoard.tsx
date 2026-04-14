@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useCatStore } from "../../stores/catStore";
+import { api } from "../../api/client";
 import { TrendingUp, TrendingDown, Minus, Zap, Clock, MessageSquare, CheckCircle2 } from "lucide-react";
 
 interface CatMetrics {
@@ -10,8 +11,6 @@ interface CatMetrics {
   totalTokens: number;
   trend: "up" | "down" | "stable";
 }
-
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const TrendIcon = ({ trend }: { trend: "up" | "down" | "stable" }) => {
   if (trend === "up") return <TrendingUp size={14} className="text-green-500" />;
@@ -28,17 +27,47 @@ export function QuotaBoard() {
     const fetchMetrics = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/api/metrics/cats`);
-        if (res.ok) {
-          const data = await res.json();
-          setMetrics(data);
-        }
+        const results = await Promise.all(
+          cats.map(async (cat) => {
+            try {
+              const data = await api.metrics.cat(cat.id, 7);
+              const rows = data.data || [];
+              const totalInvocations = rows.length;
+              const totalTokens = rows.reduce((sum: number, r: any) => sum + (r.prompt_tokens || 0) + (r.completion_tokens || 0), 0);
+              const successRate = totalInvocations > 0
+                ? rows.filter((r: any) => r.success).length / totalInvocations
+                : 1;
+              const avgLatencyMs = totalInvocations > 0
+                ? Math.round(rows.reduce((sum: number, r: any) => sum + (r.duration_ms || 0), 0) / totalInvocations)
+                : 0;
+              const trend: "up" | "down" | "stable" = successRate > 0.95 ? "up" : successRate > 0.8 ? "stable" : "down";
+              return {
+                catId: cat.id,
+                totalInvocations,
+                successRate,
+                avgLatencyMs,
+                totalTokens,
+                trend,
+              };
+            } catch {
+              return {
+                catId: cat.id,
+                totalInvocations: 0,
+                successRate: 1,
+                avgLatencyMs: 0,
+                totalTokens: 0,
+                trend: "stable" as const,
+              };
+            }
+          })
+        );
+        setMetrics(results);
       } finally {
         setLoading(false);
       }
     };
     fetchMetrics();
-  }, []);
+  }, [cats]);
 
   if (loading) {
     return <div className="p-4 text-gray-400">加载中...</div>;
@@ -95,7 +124,7 @@ export function QuotaBoard() {
                 </div>
                 <div className="w-24">
                   <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${(metric.totalTokens / totalTokens) * 100}%` }} />
+                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${totalTokens > 0 ? (metric.totalTokens / totalTokens) * 100 : 0}%` }} />
                   </div>
                 </div>
               </div>

@@ -2,6 +2,7 @@
 import pytest
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 from httpx import AsyncClient, ASGITransport
 
 from src.web.app import create_app
@@ -116,7 +117,8 @@ async def test_delete_project(app_client):
         "status": "healthy",
     })
 
-    response = await app_client.request("DELETE", "/api/governance/projects", json={"project_path": "/projects/to-delete"})
+    encoded = quote("/projects/to-delete", safe="")
+    response = await app_client.delete(f"/api/governance/projects/{encoded}")
     assert response.status_code == 200
     assert response.json()["deleted"] == "/projects/to-delete"
 
@@ -127,5 +129,5 @@ async def test_delete_project(app_client):
 @pytest.mark.anyio
 async def test_delete_nonexistent_project(app_client):
     """Deleting a missing project returns 404."""
-    response = await app_client.request("DELETE", "/api/governance/projects", json={"project_path": "no-such-project"})
+    response = await app_client.delete("/api/governance/projects/no-such-project")
     assert response.status_code == 404

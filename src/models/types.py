@@ -94,6 +94,9 @@ class CatConfig:
     caution: Optional[str] = None
     mcp_support: bool = False
     effort: str = "high"
+    account_ref: Optional[str] = None
+    capabilities: List[str] = field(default_factory=list)
+    permissions: List[str] = field(default_factory=list)
 
 
 @dataclass

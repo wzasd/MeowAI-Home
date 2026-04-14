@@ -64,7 +64,21 @@ export const useChatStore = create<ChatState>((set) => ({
   addStreamingResponse: (catId, response) => {
     set((state) => {
       const next = new Map(state.streamingResponses);
-      next.set(catId, response);
+      const existing = next.get(catId);
+      if (existing) {
+        // Accumulate streaming content from incremental chunks
+        next.set(catId, {
+          ...existing,
+          content: existing.content + response.content,
+          catName: response.catName || existing.catName,
+        });
+      } else {
+        // First chunk - initialize with empty content base
+        next.set(catId, {
+          ...response,
+          content: response.content,
+        });
+      }
       return { streamingResponses: next };
     });
   },

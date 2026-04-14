@@ -16,6 +16,7 @@ from src.governance.iron_laws import get_iron_laws_prompt
 from src.evolution.scope_guard import ScopeGuard, DriftResult
 from src.skills.chain import ChainTracker
 from src.metrics.collector import MetricsCollector, InvocationRecord
+from src.collaboration.capability_map import get_task_type, cat_can_handle
 
 
 def parse_a2a_mentions(content: str, available_cat_ids: Set[str]) -> List[str]:
@@ -199,6 +200,15 @@ class A2AController:
                             break
 
     async def _call_cat(self, service, name: str, breed_id: str, message: str, thread: Thread) -> CatResponse:
+        task_type = get_task_type(message, [])
+        cat_capabilities = getattr(getattr(service, "config", None), "capabilities", []) or []
+        if not cat_can_handle(cat_capabilities, task_type):
+            return CatResponse(
+                cat_id=breed_id,
+                cat_name=name,
+                content=f"🚫 {name} 没有 `{task_type}` 相关能力，无法处理该任务。",
+            )
+
         invocation_id = f"{thread.id}:{breed_id}:{time.time()}"
         if self.metrics_collector:
             self.metrics_collector.record_start(invocation_id)

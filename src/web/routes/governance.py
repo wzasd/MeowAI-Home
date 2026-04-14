@@ -181,13 +181,9 @@ async def upsert_governance_project(request: ProjectCreateRequest) -> Dict[str, 
         await db.close()
 
 
-@router.delete("/projects")
-async def delete_governance_project(request: Request) -> Dict[str, Any]:
-    """Delete a governance project by path (supplied in request body)."""
-    body = await request.json()
-    project_path = body.get("project_path")
-    if not project_path:
-        raise HTTPException(status_code=400, detail="project_path is required")
+@router.delete("/projects/{project_path:path}")
+async def delete_governance_project(project_path: str) -> Dict[str, Any]:
+    """Delete a governance project by path."""
     db = await _with_db()
     try:
         cursor = await db.execute(

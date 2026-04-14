@@ -64,6 +64,7 @@ export interface CatResponse {
   isAvailable: boolean;
   roles?: string[];
   evaluation?: string;
+  accountRef?: string;
 }
 
 export interface CatListResponse {
@@ -127,6 +128,29 @@ export interface EnvVarResponse {
 export interface EnvVarListResponse {
   variables: EnvVarResponse[];
   categories: string[];
+}
+
+export type AuthType = "subscription" | "api_key";
+export type Protocol = "anthropic" | "openai" | "google" | "opencode";
+
+export interface AccountResponse {
+  id: string;
+  displayName: string;
+  protocol: Protocol;
+  authType: AuthType;
+  baseUrl: string | null;
+  models: string[] | null;
+  isBuiltin: boolean;
+  hasApiKey: boolean;
+}
+
+export interface AccountListResponse {
+  accounts: AccountResponse[];
+}
+
+export interface TestKeyResponse {
+  valid: boolean;
+  error?: string;
 }
 
 /** Format timestamp to readable time */

@@ -19,6 +19,8 @@ export interface Cat {
   isAvailable: boolean;
   roles?: string[];
   evaluation?: string;
+  capabilities?: string[];
+  permissions?: string[];
 }
 
 interface CatState {
@@ -46,6 +48,8 @@ interface CatState {
       defaultModel?: string;
       personality?: string;
       mentionPatterns?: string[];
+      capabilities?: string[];
+      permissions?: string[];
     }
   ) => Promise<Cat>;
   deleteCat: (id: string) => Promise<void>;

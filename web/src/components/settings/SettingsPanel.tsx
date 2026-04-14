@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { X, Settings, Link, Variable, Palette, Cat, Shield, BarChart3, Zap, Trophy, Scale } from "lucide-react";
+import { X, Settings, Link, Variable, Palette, Cat, Shield, BarChart3, Zap, Trophy, Scale, Key } from "lucide-react";
 import { ConnectorSettings } from "./ConnectorSettings";
 import { EnvVarSettings } from "./EnvVarSettings";
 import { CatSettings } from "./CatSettings";
+import { AccountSettings } from "./AccountSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { CapabilitySettings } from "./CapabilitySettings";
 import { QuotaBoard } from "./QuotaBoard";
@@ -10,7 +11,7 @@ import { LeaderboardTab } from "./LeaderboardTab";
 import { PermissionsSettings } from "./PermissionsSettings";
 import { GovernanceSettings } from "./GovernanceSettings";
 
-type SettingsTab = "connectors" | "env" | "cats" | "appearance" | "capabilities" | "quota" | "leaderboard" | "permissions" | "governance";
+type SettingsTab = "accounts" | "connectors" | "env" | "cats" | "appearance" | "capabilities" | "quota" | "leaderboard" | "permissions" | "governance";
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
 
   const tabs = [
     { id: "cats" as const, label: "猫咪管理", icon: Cat },
+    { id: "accounts" as const, label: "AI Providers", icon: Key },
     { id: "capabilities" as const, label: "能力配置", icon: Zap },
     { id: "permissions" as const, label: "权限", icon: Shield },
     { id: "governance" as const, label: "治理", icon: Scale },
@@ -41,7 +43,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         <div className="w-56 border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
           <div className="flex items-center gap-2 border-b border-gray-200 p-4 dark:border-gray-700">
             <Settings size={20} className="text-gray-600 dark:text-gray-400" />
-            <h2 className="font-semibold text-gray-800 dark:text-gray-200">CatCafe Hub</h2>
+            <h2 className="font-semibold text-gray-800 dark:text-gray-200">MeowAI Hub</h2>
           </div>
 
           <nav className="space-y-0.5 p-2">
@@ -78,6 +80,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
 
           <div className="flex-1 overflow-y-auto p-6">
             {activeTab === "cats" && <CatSettings />}
+            {activeTab === "accounts" && <AccountSettings />}
             {activeTab === "capabilities" && <CapabilitySettings />}
             {activeTab === "permissions" && <PermissionsSettings />}
             {activeTab === "governance" && <GovernanceSettings />}

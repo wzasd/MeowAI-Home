@@ -1,6 +1,7 @@
 import click
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from src.thread import ThreadManager
 
 
@@ -35,7 +36,8 @@ def thread_cli():
 @thread_cli.command(name="create")
 @click.argument("name")
 @click.option("--cat", default="@dev", help="默认使用的猫 (@dev/@review/@research)")
-def create_thread(name, cat):
+@click.option("--project-path", default=lambda: str(Path.cwd()), help="项目目录路径（默认为当前目录）")
+def create_thread(name, cat, project_path):
     """创建新 thread"""
     manager = ThreadManager()
 
@@ -43,11 +45,12 @@ def create_thread(name, cat):
     cat_map = {"@dev": "orange", "@review": "inky", "@research": "patch"}
     cat_id = cat_map.get(cat, "orange")
 
-    thread = run_async(manager.create(name, current_cat_id=cat_id))
+    thread = run_async(manager.create(name, current_cat_id=cat_id, project_path=project_path))
     manager.switch(thread.id)  # 自动切换到新 thread
 
     click.echo(f"✅ 创建 thread: {thread.name} ({thread.id})")
     click.echo(f"   默认猫: {cat}")
+    click.echo(f"   项目路径: {project_path}")
     click.echo(f"   已自动切换到此 thread")
 
 
