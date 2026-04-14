@@ -39,3 +39,4 @@ memory/
 .vscode/
 *.swp
 *.swo
+.worktrees/
