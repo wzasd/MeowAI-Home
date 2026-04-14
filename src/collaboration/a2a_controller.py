@@ -244,7 +244,11 @@ class A2AController:
                 else:
                     session_id = active.session_id
 
-        options = InvocationOptions(system_prompt=system_prompt, session_id=session_id)
+        options = InvocationOptions(
+            system_prompt=system_prompt,
+            session_id=session_id,
+            cwd=thread.project_path,
+        )
         chunks = []
         thinking_parts = []
         new_session_id = None

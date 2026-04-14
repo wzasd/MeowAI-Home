@@ -115,3 +115,4 @@ class InvocationOptions:
     effort: Optional[str] = None
     mcp_config: Optional[Dict[str, Any]] = None
     extra_args: List[str] = field(default_factory=list)
+    cwd: Optional[str] = None

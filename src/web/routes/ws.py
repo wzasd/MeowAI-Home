@@ -50,6 +50,13 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
         await websocket.send_json({"type": "error", "message": "Thread not found"})
         return
 
+    if not thread.project_path:
+        await websocket.send_json({
+            "type": "error",
+            "message": "当前 Thread 未绑定项目目录，请先选择项目"
+        })
+        return
+
     if "@" not in content:
         content = f"@{thread.current_cat_id} {content}"
 

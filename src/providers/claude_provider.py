@@ -38,7 +38,9 @@ class ClaudeProvider(BaseProvider):
         args = self._build_args(prompt, options)
         timeout = options.timeout or 300.0
         try:
-            async for event in spawn_cli(self.config.cli_command, args, timeout=timeout):
+            async for event in spawn_cli(
+                self.config.cli_command, args, timeout=timeout, env=self.build_env(), cwd=options.cwd
+            ):
                 for msg in self._transform_event(event):
                     yield msg
         except Exception as e:
