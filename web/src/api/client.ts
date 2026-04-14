@@ -33,10 +33,10 @@ export const api = {
 
     get: (id: string) => request<ThreadDetailResponse>(`/api/threads/${id}`),
 
-    create: (name: string, catId?: string) =>
+    create: (name: string, catId?: string, projectPath?: string) =>
       request<ThreadDetailResponse>("/api/threads", {
         method: "POST",
-        body: JSON.stringify({ name, cat_id: catId }),
+        body: JSON.stringify({ name, cat_id: catId, project_path: projectPath }),
       }),
 
     rename: (id: string, name: string) =>

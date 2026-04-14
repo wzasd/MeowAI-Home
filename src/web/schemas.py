@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class ThreadCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     cat_id: str = Field(default="orange")
-    project_path: Optional[str] = Field(default=None, description="Git repository root path for Workspace integration")
+    project_path: str = Field(..., min_length=1, description="Project directory path for this thread")
 
 
 class ThreadRename(BaseModel):

@@ -125,7 +125,7 @@ class SQLiteStore(ThreadStore, MessageStore):
             current_cat_id=row[4],
             is_archived=bool(row[5]),
             messages=messages,
-            project_path=row[6] if len(row) > 6 else None
+            project_path=row[6] or "" if len(row) > 6 else ""
         )
 
     async def list_threads(self, include_archived: bool = False) -> List[Thread]:
@@ -156,7 +156,7 @@ class SQLiteStore(ThreadStore, MessageStore):
                 current_cat_id=row[4],
                 is_archived=bool(row[5]),
                 messages=messages,
-                project_path=row[6] if len(row) > 6 else None
+                project_path=row[6] or "" if len(row) > 6 else ""
             ))
 
         return threads
@@ -188,7 +188,7 @@ class SQLiteStore(ThreadStore, MessageStore):
                 current_cat_id=row[4],
                 is_archived=bool(row[5]),
                 messages=messages,
-                project_path=row[6] if len(row) > 6 else None
+                project_path=row[6] or "" if len(row) > 6 else ""
             ))
         return threads
 

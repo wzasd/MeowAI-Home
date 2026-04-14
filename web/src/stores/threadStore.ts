@@ -12,7 +12,7 @@ interface ThreadState {
 
   fetchThreads: () => Promise<void>;
   selectThread: (id: string) => Promise<void>;
-  createThread: (name: string, catId?: string) => Promise<string | null>;
+  createThread: (name: string, catId?: string, projectPath?: string) => Promise<string | null>;
   renameThread: (id: string, name: string) => Promise<void>;
   archiveThread: (id: string) => Promise<void>;
   deleteThread: (id: string) => Promise<void>;
@@ -45,8 +45,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     }
   },
 
-  createThread: async (name: string, catId?: string) => {
-    const thread = await api.threads.create(name, catId);
+  createThread: async (name: string, catId?: string, projectPath?: string) => {
+    const thread = await api.threads.create(name, catId, projectPath);
     const threadSummary: ThreadResponse = {
       id: thread.id,
       name: thread.name,
@@ -55,6 +55,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       current_cat_id: thread.current_cat_id,
       is_archived: thread.is_archived,
       message_count: thread.messages.length,
+      project_path: thread.project_path || undefined,
     };
     set((state) => ({
       threads: [threadSummary, ...state.threads],

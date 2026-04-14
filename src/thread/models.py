@@ -69,10 +69,10 @@ class Thread:
     messages: List[Message] = field(default_factory=list)
     current_cat_id: str = DEFAULT_CAT_ID
     is_archived: bool = False
-    project_path: Optional[str] = None  # Git 仓库根路径
+    project_path: str = ""  # 项目目录路径
 
     @classmethod
-    def create(cls, name: str, current_cat_id: str = DEFAULT_CAT_ID, project_path: Optional[str] = None) -> "Thread":
+    def create(cls, name: str, current_cat_id: str = DEFAULT_CAT_ID, project_path: str = "") -> "Thread":
         """创建新 thread"""
         now = datetime.now(timezone.utc)
         return cls(
@@ -82,7 +82,7 @@ class Thread:
             updated_at=now,
             current_cat_id=current_cat_id,
             messages=[],
-            project_path=project_path
+            project_path=project_path or ""
         )
 
     def add_message(self, role: RoleType, content: str, cat_id: Optional[str] = None) -> None:
@@ -122,5 +122,5 @@ class Thread:
             messages=[Message.from_dict(m) for m in data.get("messages", [])],
             current_cat_id=data.get("current_cat_id", DEFAULT_CAT_ID),
             is_archived=data.get("is_archived", False),
-            project_path=data.get("project_path")
+            project_path=data.get("project_path") or ""
         )

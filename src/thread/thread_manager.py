@@ -61,7 +61,7 @@ class ThreadManager:
 
         await self._store.initialize()
 
-    async def create(self, name: str, current_cat_id: str = "orange", project_path: Optional[str] = None) -> Thread:
+    async def create(self, name: str, current_cat_id: str = "orange", project_path: str = "") -> Thread:
         """创建新 thread"""
         thread = Thread.create(name, current_cat_id, project_path)
         await self._store.save_thread(thread)

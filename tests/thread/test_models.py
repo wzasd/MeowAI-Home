@@ -43,7 +43,7 @@ def test_thread_create():
     assert len(thread.id) == 8  # 短ID
     assert len(thread.messages) == 0
     assert thread.is_archived is False
-    assert thread.project_path is None
+    assert thread.project_path == ""
 
 
 def test_thread_create_with_project_path():
@@ -77,7 +77,7 @@ def test_thread_to_dict():
     assert data["current_cat_id"] == "orange"
     assert len(data["messages"]) == 1
     assert "id" in data
-    # project_path is None, so it should not be included
+    # project_path is empty, so it should not be included
     assert "project_path" not in data
 
 
@@ -108,7 +108,7 @@ def test_thread_from_dict():
     assert thread.name == "Test Thread"
     assert thread.current_cat_id == "patch"
     assert len(thread.messages) == 1
-    assert thread.project_path is None
+    assert thread.project_path == ""
 
 
 def test_thread_from_dict_with_project_path():

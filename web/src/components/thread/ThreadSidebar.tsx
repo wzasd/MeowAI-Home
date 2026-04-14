@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useThreadStore } from "../../stores/threadStore";
+import { useCatStore } from "../../stores/catStore";
 import { ThreadItem } from "./ThreadItem";
 import { Plus, Search, X, Pin, Clock, Star, ChevronDown, ChevronRight } from "lucide-react";
 
@@ -16,24 +17,53 @@ export function ThreadSidebar({ onCloseMobile }: ThreadSidebarProps) {
   const renameThread = useThreadStore((s) => s.renameThread);
   const archiveThread = useThreadStore((s) => s.archiveThread);
   const deleteThread = useThreadStore((s) => s.deleteThread);
+
+  const cats = useCatStore((s) => s.cats);
+  const defaultCatId = useCatStore((s) => s.defaultCatId);
+  const fetchCats = useCatStore((s) => s.fetchCats);
+
   const [search, setSearch] = useState("");
   const [expandedSections, setExpandedSections] = useState({ recent: true, archived: false });
 
+  const [isCreating, setIsCreating] = useState(false);
+  const [newThreadName, setNewThreadName] = useState("");
+  const [selectedCat, setSelectedCat] = useState("");
+  const [projectPath, setProjectPath] = useState("");
+
   useEffect(() => {
     fetchThreads();
-  }, [fetchThreads]);
+    fetchCats();
+  }, [fetchThreads, fetchCats]);
+
+  useEffect(() => {
+    if (defaultCatId && !selectedCat) {
+      setSelectedCat(defaultCatId);
+    }
+  }, [defaultCatId, selectedCat]);
 
   const filtered = threads.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()));
   const activeThreads = filtered.filter((t) => !t.is_archived);
   const archivedThreads = filtered.filter((t) => t.is_archived);
 
-  // Simulated pinned (first 3 for demo)
   const pinnedThreads = activeThreads.slice(0, Math.min(2, activeThreads.length));
   const recentThreads = activeThreads.slice(Math.min(2, activeThreads.length));
 
-  const handleCreate = async () => {
-    const name = `对话 ${threads.length + 1}`;
-    const id = await createThread(name);
+  const handleStartCreate = () => {
+    setNewThreadName(`对话 ${threads.length + 1}`);
+    setProjectPath("");
+    setSelectedCat(defaultCatId || cats[0]?.id || "orange");
+    setIsCreating(true);
+  };
+
+  const handleCancelCreate = () => {
+    setIsCreating(false);
+  };
+
+  const handleSubmitCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newThreadName.trim() || !projectPath.trim()) return;
+    const id = await createThread(newThreadName.trim(), selectedCat || undefined, projectPath.trim());
+    setIsCreating(false);
     if (id) await fetchThreads();
   };
 
@@ -55,7 +85,7 @@ export function ThreadSidebar({ onCloseMobile }: ThreadSidebarProps) {
             <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">MeowAI</h1>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={handleCreate} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" title="新建对话">
+            <button onClick={handleStartCreate} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" title="新建对话">
               <Plus size={20} />
             </button>
             {onCloseMobile && (
@@ -72,6 +102,49 @@ export function ThreadSidebar({ onCloseMobile }: ThreadSidebarProps) {
             className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:focus:ring-blue-500"
           />
         </div>
+
+        {/* Create thread form */}
+        {isCreating && (
+          <form onSubmit={handleSubmitCreate} className="mt-3 space-y-2 rounded-lg border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-900 dark:bg-blue-900/20">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">新建对话</span>
+              <button type="button" onClick={handleCancelCreate} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X size={14} />
+              </button>
+            </div>
+            <input
+              type="text"
+              value={newThreadName}
+              onChange={(e) => setNewThreadName(e.target.value)}
+              placeholder="对话名称"
+              className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+              required
+            />
+            <select
+              value={selectedCat}
+              onChange={(e) => setSelectedCat(e.target.value)}
+              className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+            >
+              {cats.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.displayName || cat.name}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={projectPath}
+              onChange={(e) => setProjectPath(e.target.value)}
+              placeholder="项目目录绝对路径"
+              className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+              required
+            />
+            <button
+              type="submit"
+              className="w-full rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              创建
+            </button>
+          </form>
+        )}
       </div>
 
       {/* Thread list with sections */}

@@ -8,6 +8,7 @@ export interface ThreadResponse {
   current_cat_id: string;
   is_archived: boolean;
   message_count: number;
+  project_path?: string;
 }
 
 export interface ThreadDetailResponse {
