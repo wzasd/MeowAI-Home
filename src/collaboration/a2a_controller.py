@@ -1,5 +1,6 @@
 import asyncio
 import re
+import time
 from dataclasses import dataclass
 from typing import List, Dict, Any, AsyncIterator, Optional, Set, Tuple
 from pathlib import Path
@@ -14,6 +15,7 @@ from src.memory.entity_extractor import extract_entities
 from src.governance.iron_laws import get_iron_laws_prompt
 from src.evolution.scope_guard import ScopeGuard, DriftResult
 from src.skills.chain import ChainTracker
+from src.metrics.collector import MetricsCollector, InvocationRecord
 
 
 def parse_a2a_mentions(content: str, available_cat_ids: Set[str]) -> List[str]:
@@ -49,12 +51,13 @@ class CatResponse:
 class A2AController:
     """A2A 协作控制器"""
 
-    def __init__(self, agents: List[Dict[str, Any]], session_chain=None, dag_executor=None, template_factory=None, memory_service=None):
+    def __init__(self, agents: List[Dict[str, Any]], session_chain=None, dag_executor=None, template_factory=None, memory_service=None, metrics_collector=None):
         self.agents = agents
         self.session_chain = session_chain
         self.dag_executor = dag_executor
         self.template_factory = template_factory
         self.memory_service = memory_service
+        self.metrics_collector = metrics_collector or MetricsCollector()
         self.mcp_executor = MCPExecutor()
         self.skill_injector = SkillInjector()
         self.scope_guard = ScopeGuard(memory_service.episodic) if memory_service else None
@@ -196,6 +199,10 @@ class A2AController:
                             break
 
     async def _call_cat(self, service, name: str, breed_id: str, message: str, thread: Thread) -> CatResponse:
+        invocation_id = f"{thread.id}:{breed_id}:{time.time()}"
+        if self.metrics_collector:
+            self.metrics_collector.record_start(invocation_id)
+
         client = self.mcp_executor.register_tools(thread)
         system_prompt = get_iron_laws_prompt() + "\n\n" + service.build_system_prompt()
 
@@ -252,14 +259,41 @@ class A2AController:
         chunks = []
         thinking_parts = []
         new_session_id = None
+        prompt_tokens = 0
+        completion_tokens = 0
+        success = True
 
-        async for msg in service.invoke(message, options):
-            if msg.type == AgentMessageType.TEXT:
-                chunks.append(msg.content)
-            elif msg.type == AgentMessageType.THINKING:
-                thinking_parts.append(msg.content)
-            elif msg.type == AgentMessageType.DONE and msg.session_id:
-                new_session_id = msg.session_id
+        try:
+            async for msg in service.invoke(message, options):
+                if msg.type == AgentMessageType.TEXT:
+                    chunks.append(msg.content)
+                elif msg.type == AgentMessageType.THINKING:
+                    thinking_parts.append(msg.content)
+                elif msg.type == AgentMessageType.DONE and msg.session_id:
+                    new_session_id = msg.session_id
+                elif msg.type == AgentMessageType.USAGE and msg.usage:
+                    prompt_tokens = msg.usage.input_tokens or 0
+                    completion_tokens = msg.usage.output_tokens or 0
+        except Exception:
+            success = False
+            raise
+        finally:
+            if prompt_tokens == 0 and completion_tokens == 0:
+                total_content = system_prompt + message + "".join(chunks) + "".join(thinking_parts)
+                completion_tokens = int(len(total_content.encode("utf-8")) / 4)
+            if self.metrics_collector:
+                record = InvocationRecord(
+                    cat_id=breed_id,
+                    thread_id=thread.id,
+                    project_path=thread.project_path,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    success=success,
+                )
+                try:
+                    await self.metrics_collector.record_finish(invocation_id, record)
+                except Exception:
+                    pass
 
         raw_content = "".join(chunks)
         parsed = await self.mcp_executor.execute_callbacks(raw_content, client, thread)
