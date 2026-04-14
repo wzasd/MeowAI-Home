@@ -28,6 +28,7 @@ def test_run_nest_init_creates_nest(tmp_path: Path, monkeypatch) -> None:
             },
         )(),
     )
+    monkeypatch.setattr("src.config.nest_registry.INDEX_PATH", tmp_path / "nest-index.json")
     old_cwd = os.getcwd()
     try:
         os.chdir(tmp_path)
@@ -78,6 +79,7 @@ def test_run_nest_init_already_initialized_shows_status(tmp_path: Path, monkeypa
             },
         )(),
     )
+    monkeypatch.setattr("src.config.nest_registry.INDEX_PATH", tmp_path / "nest-index.json")
     old_cwd = os.getcwd()
     try:
         os.chdir(tmp_path)
@@ -87,7 +89,7 @@ def test_run_nest_init_already_initialized_shows_status(tmp_path: Path, monkeypa
         run_nest_init(interactive=False)
         captured = capfd.readouterr()
         assert "项目已激活" in captured.out
-        assert "阿橘" not in captured.out  # status display doesn't print cat details
+        assert "角色：" not in captured.out  # status display doesn't print cat details
     finally:
         os.chdir(old_cwd)
 
@@ -103,6 +105,7 @@ def test_run_nest_init_no_valid_cats(tmp_path: Path, monkeypatch, capfd) -> None
             },
         )(),
     )
+    monkeypatch.setattr("src.config.nest_registry.INDEX_PATH", tmp_path / "nest-index.json")
     old_cwd = os.getcwd()
     try:
         os.chdir(tmp_path)

@@ -37,8 +37,10 @@ def run_nest_init(interactive: bool = True) -> None:
         from src.models.registry_init import initialize_registries
 
         initialize_registries(str(project_path / "cat-config.json"))
-    except Exception:
+    except FileNotFoundError:
         pass
+    except Exception as e:
+        click.echo(f"  ⚠️ 加载 cat-config.json 时出错: {e}")
 
     valid_cats: Dict[str, Any] = {cid: None for cid in cat_registry.get_all_ids()}
     if not valid_cats:
