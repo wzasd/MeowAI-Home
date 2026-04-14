@@ -78,8 +78,9 @@ def load_nest_config(
     fixed, fix_warnings = fix_config(raw, valid_cats)
     warnings.extend(fix_warnings)
 
+    fixed["project_name"] = project_name
     try:
-        config = NestConfig(project_name=project_name, **fixed)
+        config = NestConfig(**fixed)
     except ValidationError as exc:
         warnings.append(f"Validation failed ({exc}); using default config.")
         default = NestConfig(project_name=project_name, cats=list(valid_cats.keys())[:1] or ["orange"])

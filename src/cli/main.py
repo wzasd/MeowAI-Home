@@ -4,6 +4,7 @@ from pathlib import Path
 from src.models.cat_registry import CatRegistry
 from src.models.agent_registry import AgentRegistry
 from src.providers import PROVIDER_MAP
+from src.cli.nest_init import run_nest_init
 from src.cli.thread_commands import thread_cli, get_cat_mention, run_async
 from src.collaboration.intent_parser import parse_intent
 from src.collaboration.a2a_controller import A2AController
@@ -524,5 +525,13 @@ def chat(cat: str, thread_id: str, resume: bool):
         run_async(manager.update_thread(thread))
 
 
+def main():
+    import sys
+    if len(sys.argv) == 1:
+        run_nest_init(interactive=True)
+    else:
+        cli()
+
+
 if __name__ == '__main__':
-    cli()
+    main()
