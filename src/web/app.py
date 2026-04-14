@@ -28,6 +28,7 @@ from src.web.routes.audit import router as audit_router
 from src.web.routes.signals import router as signals_router
 from src.web.routes.sessions import router as sessions_router
 from src.web.routes.governance import router as governance_router
+from src.web.routes.capabilities import router as capabilities_router
 
 
 @asynccontextmanager
@@ -91,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(signals_router, prefix="/api")
     app.include_router(sessions_router, prefix="/api")
     app.include_router(governance_router)
+    app.include_router(capabilities_router, prefix="/api")
 
     # Mount packs routes if available
     try:

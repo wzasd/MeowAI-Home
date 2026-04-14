@@ -131,3 +131,66 @@ async def test_delete_nonexistent_project(app_client):
     """Deleting a missing project returns 404."""
     response = await app_client.delete("/api/governance/projects/no-such-project")
     assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_confirm_bootstraps_real_project(app_client):
+    """POST /confirm performs real bootstrap on an existing directory."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        response = await app_client.post("/api/governance/confirm", json={"project_path": tmpdir})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["project_path"] == tmpdir
+        assert "status" in data
+        assert "findings" in data
+        assert any(f["rule"] == "capabilities" for f in data["findings"])
+
+        # Verify project is persisted
+        list_resp = await app_client.get("/api/governance/projects")
+        projects = list_resp.json()["projects"]
+        assert any(p["project_path"] == tmpdir for p in projects)
+
+
+@pytest.mark.anyio
+async def test_sync_updates_existing_project(app_client):
+    """POST /sync refreshes health for an already-confirmed project."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # First confirm
+        await app_client.post("/api/governance/confirm", json={"project_path": tmpdir})
+
+        # Then sync
+        response = await app_client.post("/api/governance/sync", json={"project_path": tmpdir})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["project_path"] == tmpdir
+        assert "status" in data
+        assert "findings" in data
+
+
+@pytest.mark.anyio
+async def test_confirm_missing_project_returns_missing(app_client):
+    """POST /confirm on a nonexistent path returns missing status."""
+    response = await app_client.post("/api/governance/confirm", json={"project_path": "/nonexistent/path/xyz"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["status"] == "missing"
+    assert any(f["severity"] == "error" for f in data["findings"])
+
+
+@pytest.mark.anyio
+async def test_health_refreshes_all_projects(app_client):
+    """GET /health refreshes each project's health via health_check."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        await app_client.post("/api/governance/confirm", json={"project_path": tmpdir})
+
+        response = await app_client.get("/api/governance/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert "projects" in data
+        assert any(p["project_path"] == tmpdir for p in data["projects"])

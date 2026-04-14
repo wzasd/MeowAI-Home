@@ -19,6 +19,7 @@ export interface ThreadDetailResponse {
   current_cat_id: string;
   is_archived: boolean;
   messages: MessageResponse[];
+  project_path?: string;
 }
 
 export interface MessageResponse {
@@ -151,6 +152,33 @@ export interface AccountListResponse {
 export interface TestKeyResponse {
   valid: boolean;
   error?: string;
+}
+
+export interface CapabilityBoardItem {
+  id: string;
+  type: "mcp" | "skill";
+  source: string;
+  enabled: boolean;
+  description?: string;
+  triggers?: string[];
+  cats: Record<string, boolean>;
+  connectionStatus?: "connected" | "error" | "timeout" | "unsupported";
+  tools?: Array<{ name: string; description?: string }>;
+  probeError?: string;
+}
+
+export interface CapabilityBoardResponse {
+  items: CapabilityBoardItem[];
+  projectPath: string;
+}
+
+export interface CapabilityPatchRequest {
+  capabilityId: string;
+  capabilityType: "mcp" | "skill";
+  scope: "global" | "cat";
+  enabled: boolean;
+  catId?: string;
+  projectPath?: string;
 }
 
 /** Format timestamp to readable time */

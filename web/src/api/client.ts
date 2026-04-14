@@ -14,6 +14,8 @@ import type {
   AccountListResponse,
   AccountResponse,
   TestKeyResponse,
+  CapabilityBoardResponse,
+  CapabilityPatchRequest,
 } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -252,5 +254,14 @@ export const api = {
       request<{ success: boolean }>(`/api/governance/projects/${encodeURIComponent(projectPath)}`, { method: "DELETE" }),
     confirmProject: (projectPath: string) =>
       request<{ success: boolean }>("/api/governance/confirm", { method: "POST", body: JSON.stringify({ project_path: projectPath }) }),
+    syncProject: (projectPath: string) =>
+      request<{ success: boolean }>("/api/governance/sync", { method: "POST", body: JSON.stringify({ project_path: projectPath }) }),
+  },
+
+  capabilities: {
+    get: (projectPath: string, probe?: boolean) =>
+      request<CapabilityBoardResponse>(`/api/capabilities?project_path=${encodeURIComponent(projectPath)}${probe ? "&probe=true" : ""}`),
+    patch: (data: CapabilityPatchRequest) =>
+      request<{ ok: boolean; capability: any }>("/api/capabilities", { method: "PATCH", body: JSON.stringify(data) }),
   },
 };

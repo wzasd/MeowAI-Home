@@ -1,6 +1,6 @@
 /** React hook for WebSocket connection to a thread. */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { WSManager } from "../api/websocket";
 import { useThreadStore } from "../stores/threadStore";
 import { useChatStore } from "../stores/chatStore";

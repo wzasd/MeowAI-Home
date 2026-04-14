@@ -320,7 +320,7 @@ export function SignalInboxPage() {
   // Select first article when articles load
   useEffect(() => {
     if (articles.length > 0 && !selectedId) {
-      setSelectedId(articles[0].id);
+      setSelectedId(articles[0]!.id);
     }
   }, [articles, selectedId]);
 

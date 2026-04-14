@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from src.governance.iron_laws import IRON_LAWS
+from src.governance.bootstrap import GovernanceBootstrapService, BootstrapResult, GovernanceFinding
 
 router = APIRouter(prefix="/api/governance", tags=["governance"])
 
@@ -120,15 +121,39 @@ async def get_iron_laws():
 
 
 @router.get("/health", response_model=GovernanceHealthResponse)
-async def get_governance_health() -> GovernanceHealthResponse:
-    """Get governance health status for all projects."""
+async def get_governance_health(request: Request) -> GovernanceHealthResponse:
+    """Get governance health status for all projects, refreshing each via health check."""
     db = await _with_db()
+    cat_registry = getattr(request.app.state, "cat_registry", None)
+    service = GovernanceBootstrapService(cat_registry=cat_registry)
     try:
         cursor = await db.execute(
             "SELECT project_path, status, version, findings, synced_at, confirmed FROM governance_projects"
         )
         rows = await cursor.fetchall()
-        projects = [_row_to_project(row) for row in rows]
+        projects: List[GovernanceProject] = []
+        for row in rows:
+            project_path = row["project_path"]
+            result = service.health_check(project_path)
+            findings_json = json.dumps([
+                {"rule": f.rule, "severity": f.severity, "message": f.message}
+                for f in result.findings
+            ])
+            synced_at = time.time()
+            await db.execute("""
+                UPDATE governance_projects
+                SET status = ?, version = ?, findings = ?, synced_at = ?
+                WHERE project_path = ?
+            """, (result.status, result.version, findings_json, synced_at, project_path))
+            projects.append(GovernanceProject(
+                project_path=project_path,
+                status=result.status,
+                pack_version=result.version,
+                last_synced_at=datetime.utcfromtimestamp(synced_at).isoformat(),
+                findings=[GovernanceFinding(**{"rule": f.rule, "severity": f.severity, "message": f.message}) for f in result.findings],
+                confirmed=bool(row["confirmed"]),
+            ))
+        await db.commit()
         return GovernanceHealthResponse(projects=projects)
     finally:
         await db.close()
@@ -214,11 +239,18 @@ async def discover_projects(request: DiscoverRequest) -> Dict[str, Any]:
 
 
 @router.post("/confirm")
-async def confirm_governance(request: ConfirmRequest) -> Dict[str, Any]:
-    """Sync governance rules for a project."""
+async def confirm_governance(request: ConfirmRequest, http_request: Request) -> Dict[str, Any]:
+    """Confirm and bootstrap governance for a project (first-time activation)."""
+    cat_registry = getattr(http_request.app.state, "cat_registry", None)
+    service = GovernanceBootstrapService(cat_registry=cat_registry)
+    result = service.bootstrap(request.project_path)
+
     db = await _with_db()
     try:
-        synced_at = time.time()
+        findings_json = json.dumps([
+            {"rule": f.rule, "severity": f.severity, "message": f.message}
+            for f in result.findings
+        ])
         await db.execute("""
             INSERT INTO governance_projects
             (project_path, status, version, findings, synced_at, confirmed)
@@ -230,14 +262,56 @@ async def confirm_governance(request: ConfirmRequest) -> Dict[str, Any]:
                 synced_at = excluded.synced_at,
                 confirmed = excluded.confirmed
         """, (
-            request.project_path,
-            "healthy",
-            "1.0.0",
-            "[]",
-            synced_at,
-            1,
+            result.project_path,
+            result.status,
+            result.version,
+            findings_json,
+            result.synced_at,
+            1 if result.confirmed else 0,
         ))
         await db.commit()
-        return {"success": True, "project_path": request.project_path, "status": "healthy"}
+        return {
+            "success": True,
+            "project_path": result.project_path,
+            "status": result.status,
+            "findings": [{"rule": f.rule, "severity": f.severity, "message": f.message} for f in result.findings],
+        }
+    finally:
+        await db.close()
+
+
+@router.post("/sync")
+async def sync_governance(request: ConfirmRequest, http_request: Request) -> Dict[str, Any]:
+    """Re-sync an already-confirmed project without full re-bootstrap."""
+    cat_registry = getattr(http_request.app.state, "cat_registry", None)
+    service = GovernanceBootstrapService(cat_registry=cat_registry)
+    result = service.health_check(request.project_path)
+
+    db = await _with_db()
+    try:
+        findings_json = json.dumps([
+            {"rule": f.rule, "severity": f.severity, "message": f.message}
+            for f in result.findings
+        ])
+        synced_at = time.time()
+        await db.execute("""
+            UPDATE governance_projects
+            SET status = ?, version = ?, findings = ?, synced_at = ?, confirmed = ?
+            WHERE project_path = ?
+        """, (
+            result.status,
+            result.version,
+            findings_json,
+            synced_at,
+            1,
+            request.project_path,
+        ))
+        await db.commit()
+        return {
+            "success": True,
+            "project_path": result.project_path,
+            "status": result.status,
+            "findings": [{"rule": f.rule, "severity": f.severity, "message": f.message} for f in result.findings],
+        }
     finally:
         await db.close()

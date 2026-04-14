@@ -1,10 +1,8 @@
 /** GovernanceSettings — external project governance health panel with SQLite-backed CRUD. */
 
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2, Plus, Trash2, RefreshCw, Zap } from "lucide-react";
 import { api } from "../../api/client";
-
-const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface GovernanceFinding {
   rule: string;
@@ -14,7 +12,7 @@ interface GovernanceFinding {
 
 interface GovernanceProject {
   project_path: string;
-  status: "healthy" | "stale" | "missing" | "never-synced";
+  status: "healthy" | "stale" | "missing" | "never-synced" | "error";
   pack_version: string | null;
   last_synced_at: string | null;
   findings: GovernanceFinding[];
@@ -25,6 +23,7 @@ const STATUS_STYLES: Record<string, { icon: typeof CheckCircle2; bg: string; tex
   healthy: { icon: CheckCircle2, bg: "bg-green-50 dark:bg-green-900/20", text: "text-green-700 dark:text-green-400", label: "正常" },
   stale: { icon: AlertTriangle, bg: "bg-yellow-50 dark:bg-yellow-900/20", text: "text-yellow-700 dark:text-yellow-400", label: "过期" },
   missing: { icon: XCircle, bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-700 dark:text-red-400", label: "缺失" },
+  error: { icon: XCircle, bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-700 dark:text-red-400", label: "错误" },
   "never-synced": { icon: HelpCircle, bg: "bg-gray-50 dark:bg-gray-700/50", text: "text-gray-600 dark:text-gray-400", label: "未同步" },
 };
 
@@ -33,6 +32,7 @@ export function GovernanceSettings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newPath, setNewPath] = useState("");
 
@@ -59,9 +59,21 @@ export function GovernanceSettings() {
       await api.governance.confirmProject(projectPath);
       await fetchProjects();
     } catch (e: any) {
-      setError(e.message || "同步失败");
+      setError(e.message || "激活失败");
     } finally {
       setConfirming(null);
+    }
+  };
+
+  const handleSync = async (projectPath: string) => {
+    setSyncing(projectPath);
+    try {
+      await api.governance.syncProject(projectPath);
+      await fetchProjects();
+    } catch (e: any) {
+      setError(e.message || "同步失败");
+    } finally {
+      setSyncing(null);
     }
   };
 
@@ -71,9 +83,9 @@ export function GovernanceSettings() {
     try {
       await api.governance.addProject({
         project_path: newPath.trim(),
-        status: "healthy",
+        status: "never-synced",
         findings: [],
-        confirmed: true,
+        confirmed: false,
       });
       setNewPath("");
       await fetchProjects();
@@ -155,47 +167,82 @@ export function GovernanceSettings() {
               <tr>
                 <th className="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">项目路径</th>
                 <th className="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">状态</th>
-                <th className="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">版本</th>
                 <th className="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">上次同步</th>
                 <th className="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {projects.map((p) => {
-                const style = STATUS_STYLES[p.status] || STATUS_STYLES["never-synced"];
+                const style = STATUS_STYLES[p.status] || STATUS_STYLES["never-synced"]!;
                 const StatusIcon = style.icon;
                 const shortPath = p.project_path.split(/[/\\]/).slice(-2).join("/");
                 const syncDate = p.last_synced_at
                   ? new Date(p.last_synced_at).toLocaleDateString("zh-CN")
                   : "—";
+                const isConfirming = confirming === p.project_path;
+                const isSyncing = syncing === p.project_path;
 
                 return (
                   <tr key={p.project_path} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <td className="px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-300" title={p.project_path}>
-                      {shortPath}
+                    <td className="px-3 py-2 align-top">
+                      <div className="font-mono text-xs text-gray-700 dark:text-gray-300" title={p.project_path}>
+                        {shortPath}
+                      </div>
+                      {!p.confirmed && (
+                        <div className="mt-1 inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                          未激活
+                        </div>
+                      )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top">
                       <span
                         className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${style.bg} ${style.text}`}
                       >
                         <StatusIcon size={12} />
                         {style.label}
                       </span>
+                      {p.findings.length > 0 && (
+                        <div className="mt-1 max-w-xs space-y-0.5">
+                          {p.findings.map((f, i) => (
+                            <div
+                              key={i}
+                              className={[
+                                "text-[10px]",
+                                f.severity === "error" ? "text-red-600 dark:text-red-400" : "",
+                                f.severity === "warning" ? "text-amber-600 dark:text-amber-400" : "",
+                                f.severity === "info" ? "text-gray-500 dark:text-gray-400" : "",
+                              ].join(" ")}
+                            >
+                              {f.severity === "error" ? "●" : f.severity === "warning" ? "●" : "○"} {f.message}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                      {p.pack_version || "—"}
+                    <td className="px-3 py-2 align-top text-xs text-gray-500 dark:text-gray-400">
+                      {syncDate}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{syncDate}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top">
                       <div className="flex items-center gap-2">
-                        {(p.status === "stale" || p.status === "never-synced") && (
+                        {!p.confirmed ? (
                           <button
                             type="button"
                             onClick={() => handleConfirm(p.project_path)}
-                            disabled={confirming === p.project_path}
-                            className="rounded bg-blue-500 px-2 py-1 text-xs text-white hover:bg-blue-600 disabled:opacity-50"
+                            disabled={isConfirming}
+                            className="flex items-center gap-1 rounded bg-emerald-500 px-2 py-1 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"
                           >
-                            {confirming === p.project_path ? "同步中..." : "立即同步"}
+                            {isConfirming ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                            {isConfirming ? "激活中..." : "激活"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSync(p.project_path)}
+                            disabled={isSyncing}
+                            className="flex items-center gap-1 rounded bg-blue-500 px-2 py-1 text-xs text-white hover:bg-blue-600 disabled:opacity-50"
+                          >
+                            {isSyncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                            {isSyncing ? "同步中..." : "同步"}
                           </button>
                         )}
                         <button
@@ -206,15 +253,6 @@ export function GovernanceSettings() {
                           <Trash2 size={12} />
                         </button>
                       </div>
-                      {p.findings.length > 0 && (
-                        <div className="mt-1 space-y-0.5">
-                          {p.findings.map((f, i) => (
-                            <div key={i} className="text-[10px] text-amber-600 dark:text-amber-400">
-                              ⚠ {f.message}
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </td>
                   </tr>
                 );

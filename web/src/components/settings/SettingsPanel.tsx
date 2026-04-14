@@ -5,7 +5,7 @@ import { EnvVarSettings } from "./EnvVarSettings";
 import { CatSettings } from "./CatSettings";
 import { AccountSettings } from "./AccountSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
-import { CapabilitySettings } from "./CapabilitySettings";
+import { CapabilityBoard } from "./CapabilityBoard";
 import { QuotaBoard } from "./QuotaBoard";
 import { LeaderboardTab } from "./LeaderboardTab";
 import { PermissionsSettings } from "./PermissionsSettings";
@@ -81,7 +81,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           <div className="flex-1 overflow-y-auto p-6">
             {activeTab === "cats" && <CatSettings />}
             {activeTab === "accounts" && <AccountSettings />}
-            {activeTab === "capabilities" && <CapabilitySettings />}
+            {activeTab === "capabilities" && <CapabilityBoard />}
             {activeTab === "permissions" && <PermissionsSettings />}
             {activeTab === "governance" && <GovernanceSettings />}
             {activeTab === "quota" && <QuotaBoard />}

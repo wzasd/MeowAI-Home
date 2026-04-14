@@ -7,7 +7,6 @@ import {
   Folder,
   FolderOpen,
   Search,
-  Plus,
   RefreshCw,
   Terminal,
   Globe,

@@ -20,6 +20,8 @@ dependencies = [
     "croniter>=2.0.0",
     "feedparser>=6.0.0",
     "beautifulsoup4>=4.12.0",
+    "tomli>=2.0.0",
+    "tomli-w>=1.0.0",
 ]
 
 [project.scripts]

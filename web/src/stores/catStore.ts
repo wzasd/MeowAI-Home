@@ -21,6 +21,7 @@ export interface Cat {
   evaluation?: string;
   capabilities?: string[];
   permissions?: string[];
+  accountRef?: string;
 }
 
 interface CatState {

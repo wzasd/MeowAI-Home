@@ -69,7 +69,7 @@ export default function App() {
             </button>
           ))}
         </div>
-        <ThreadSidebar onCloseMobile={() => setIsMobileMenuOpen(false)} onOpenSettings={() => setIsSettingsOpen(true)} />
+        <ThreadSidebar onCloseMobile={() => setIsMobileMenuOpen(false)} />
       </aside>
 
       {/* Main content area */}
