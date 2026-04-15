@@ -1,6 +1,6 @@
 """Tests for Worklist routing upgrade (A5)."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from src.collaboration.a2a_controller import A2AController, parse_a2a_mentions
 
 
@@ -81,11 +81,16 @@ class TestWorklistSerialExecute:
         thread.add_message = MagicMock()
 
         responses = []
-        with patch.object(ctrl, "_call_cat", new_callable=AsyncMock) as mock_call:
-            mock_call.side_effect = [
+
+        async def _agen(*args, **kwargs):
+            for resp in [
                 MagicMock(content="response from opus", targetCats=None),
                 MagicMock(content="response from sonnet", targetCats=None),
-            ]
+            ]:
+                yield resp
+
+        mock_call = MagicMock(side_effect=_agen)
+        with patch.object(ctrl, "_call_cat", mock_call):
             async for r in ctrl._serial_execute("hello", thread):
                 responses.append(r)
 
@@ -103,15 +108,19 @@ class TestWorklistSerialExecute:
         thread.messages = []
         thread.add_message = MagicMock()
 
-        with patch.object(ctrl, "_call_cat", new_callable=AsyncMock) as mock_call:
-            # opus mentions @haiku
-            r1 = MagicMock(content="@haiku please review", targetCats=None)
-            # sonnet responds
-            r2 = MagicMock(content="done from sonnet", targetCats=None)
-            # haiku responds (was added via mention)
-            r3 = MagicMock(content="done", targetCats=None)
-            mock_call.side_effect = [r1, r2, r3]
+        # opus mentions @haiku
+        r1 = MagicMock(content="@haiku please review", targetCats=None)
+        # sonnet responds
+        r2 = MagicMock(content="done from sonnet", targetCats=None)
+        # haiku responds (was added via mention)
+        r3 = MagicMock(content="done", targetCats=None)
 
+        async def _agen(*args, **kwargs):
+            for resp in [r1, r2, r3]:
+                yield resp
+
+        mock_call = MagicMock(side_effect=_agen)
+        with patch.object(ctrl, "_call_cat", mock_call):
             responses = []
             async for r in ctrl._serial_execute("hello", thread):
                 responses.append(r)
@@ -130,15 +139,14 @@ class TestWorklistSerialExecute:
         thread.messages = []
         thread.add_message = MagicMock()
 
-        with patch.object(ctrl, "_call_cat", new_callable=AsyncMock) as mock_call:
-            # Each response mentions the other cat, creating a potential infinite loop
-            def make_response(*args, **kwargs):
-                breed_id = args[2]
-                other = "sonnet" if breed_id == "opus" else "opus"
-                return MagicMock(content=f"@{other} ping", targetCats=None)
+        # Each response mentions the other cat, creating a potential infinite loop
+        async def _agen(*args, **kwargs):
+            breed_id = args[2]
+            other = "sonnet" if breed_id == "opus" else "opus"
+            yield MagicMock(content=f"@{other} ping", targetCats=None)
 
-            mock_call.side_effect = make_response
-
+        mock_call = MagicMock(side_effect=_agen)
+        with patch.object(ctrl, "_call_cat", mock_call):
             responses = []
             async for r in ctrl._serial_execute("hello", thread):
                 responses.append(r)
@@ -157,13 +165,17 @@ class TestWorklistSerialExecute:
         thread.messages = []
         thread.add_message = MagicMock()
 
-        with patch.object(ctrl, "_call_cat", new_callable=AsyncMock) as mock_call:
-            # opus mentions @opus (itself) -- should be ignored
-            r1 = MagicMock(content="@opus self-ref @sonnet cross-ref", targetCats=None)
-            r2 = MagicMock(content="done", targetCats=None)
-            r3 = MagicMock(content="done again", targetCats=None)
-            mock_call.side_effect = [r1, r2, r3]
+        # opus mentions @opus (itself) -- should be ignored
+        r1 = MagicMock(content="@opus self-ref @sonnet cross-ref", targetCats=None)
+        r2 = MagicMock(content="done", targetCats=None)
+        r3 = MagicMock(content="done again", targetCats=None)
 
+        async def _agen(*args, **kwargs):
+            for resp in [r1, r2, r3]:
+                yield resp
+
+        mock_call = MagicMock(side_effect=_agen)
+        with patch.object(ctrl, "_call_cat", mock_call):
             responses = []
             async for r in ctrl._serial_execute("hello", thread):
                 responses.append(r)
@@ -187,11 +199,15 @@ class TestWorklistSerialExecute:
         # Simulate user messages queued
         ctrl._user_queue_has_pending = MagicMock(return_value=True)
 
-        with patch.object(ctrl, "_call_cat", new_callable=AsyncMock) as mock_call:
-            # opus mentions @sonnet, but fairness gate should block adding sonnet
-            r1 = MagicMock(content="@sonnet please help", targetCats=None)
-            mock_call.side_effect = [r1]
+        # opus mentions @sonnet, but fairness gate should block adding sonnet
+        r1 = MagicMock(content="@sonnet please help", targetCats=None)
 
+        async def _agen(*args, **kwargs):
+            for resp in [r1]:
+                yield resp
+
+        mock_call = MagicMock(side_effect=_agen)
+        with patch.object(ctrl, "_call_cat", mock_call):
             responses = []
             async for r in ctrl._serial_execute("hello", thread):
                 responses.append(r)
