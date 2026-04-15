@@ -88,6 +88,46 @@ async def read_file_tool(path: str, start_line: int = None, end_line: int = None
         return {"error": str(e)}
 
 
+async def read_interactive_response_tool(thread_id: str, block_id: str = None) -> Dict[str, Any]:
+    """读取用户在 interactive block 中的选择结果"""
+    from src.thread import ThreadManager
+    manager = ThreadManager()
+    thread = await manager.get(thread_id)
+    if not thread:
+        return {"error": f"Thread not found: {thread_id}"}
+
+    responses = thread.metadata.get("interactive_responses", []) if thread.metadata else []
+    if block_id:
+        responses = [r for r in responses if r.get("block_id") == block_id]
+
+    return {
+        "responses": responses[-10:],  # Return last 10 matching responses
+        "total": len(responses),
+    }
+
+
+async def read_uploaded_file_tool(thread_id: str, filename: str) -> Dict[str, Any]:
+    """读取用户上传到 thread 的附件内容"""
+    from src.thread import ThreadManager
+    manager = ThreadManager()
+    thread = await manager.get(thread_id)
+    if not thread:
+        return {"error": f"Thread not found: {thread_id}"}
+    if not thread.project_path:
+        return {"error": "Thread has no project path"}
+
+    upload_dir = Path(thread.project_path) / ".meowai" / "uploads" / thread_id
+    file_path = upload_dir / filename
+
+    # Security check: resolved path must be within upload_dir
+    resolved_path = file_path.resolve()
+    resolved_dir = upload_dir.resolve()
+    if not str(resolved_path).startswith(str(resolved_dir)):
+        return {"error": "Path traversal detected"}
+
+    return await read_file_tool(str(file_path))
+
+
 async def write_file_tool(path: str, content: str, create_dirs: bool = False) -> Dict[str, Any]:
     """写入文件（受保护路径检查）"""
     if _is_path_protected(path):
@@ -436,6 +476,22 @@ TOOL_REGISTRY = {
             "end_line": {"type": "integer", "description": "结束行号（可选）"}
         },
         "handler": read_file_tool
+    },
+    "read_uploaded_file": {
+        "description": "读取用户上传到当前 Thread 的附件内容",
+        "parameters": {
+            "thread_id": {"type": "string", "description": "Thread ID"},
+            "filename": {"type": "string", "description": "上传时的文件名"}
+        },
+        "handler": read_uploaded_file_tool
+    },
+    "read_interactive_response": {
+        "description": "读取用户在 interactive block 中的选择结果",
+        "parameters": {
+            "thread_id": {"type": "string", "description": "Thread ID"},
+            "block_id": {"type": "string", "description": "Interactive block ID（可选）"}
+        },
+        "handler": read_interactive_response_tool
     },
     "write_file": {
         "description": "写入/创建文件",

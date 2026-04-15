@@ -1,6 +1,7 @@
 """WebSocket endpoint for streaming agent responses."""
 
 import logging
+import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -34,6 +35,10 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 await _handle_send_message(
                     websocket, thread_id, data, tm, agent_router, app
                 )
+            elif data.get("type") == "interactive_action":
+                await _handle_interactive_action(
+                    websocket, thread_id, data, tm
+                )
             elif data.get("type") == "ping":
                 await websocket.send_json({"type": "pong"})
 
@@ -41,6 +46,37 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         pass
     finally:
         manager.remove(thread_id, websocket)
+
+
+async def _handle_interactive_action(websocket, thread_id, data, tm):
+    block_id = data.get("block_id", "")
+    values = data.get("values", [])
+
+    thread = await tm.get(thread_id)
+    if not thread:
+        await websocket.send_json({"type": "error", "message": "Thread not found"})
+        return
+
+    # Persist to thread metadata
+    responses = thread.metadata.get("interactive_responses", []) if thread.metadata else []
+    responses.append({"block_id": block_id, "values": values, "timestamp": time.time()})
+    if thread.metadata is None:
+        thread.metadata = {}
+    thread.metadata["interactive_responses"] = responses
+    await tm.update_thread(thread)
+
+    await websocket.send_json({
+        "type": "interactive_ack",
+        "block_id": block_id,
+        "values": values,
+    })
+
+    # Also broadcast to other connections on the same thread
+    await manager.broadcast(thread_id, {
+        "type": "interactive_response",
+        "block_id": block_id,
+        "values": values,
+    })
 
 
 async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app):
@@ -73,14 +109,16 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
     if tracker:
         tracker.cancel_all(thread_id)
 
-    # Persist user message
-    user_msg = Message(role="user", content=intent.clean_message)
-    thread.add_message("user", intent.clean_message)
+    # Persist user message (with attachments if any)
+    attachments = data.get("attachments", []) or []
+    metadata = {"attachments": attachments} if attachments else None
+    user_msg = Message(role="user", content=intent.clean_message, metadata=metadata)
+    thread.add_message("user", intent.clean_message, metadata=metadata)
     await tm.add_message(thread.id, user_msg)
 
     await websocket.send_json({
         "type": "message_sent",
-        "message": {"role": "user", "content": intent.clean_message, "cat_id": None},
+        "message": {"role": "user", "content": intent.clean_message, "cat_id": None, "metadata": metadata},
     })
 
     await websocket.send_json({
