@@ -215,6 +215,37 @@ function CapabilitySection({ title, icon: Icon, items, cats, toggling, onToggle,
                         </span>
                       </div>
                     )}
+                    {item.type === "skill" && item.auditStatus && (
+                      <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                        <span
+                          className={[
+                            "inline-block h-1.5 w-1.5 rounded-full",
+                            item.auditStatus === "passed" ? "bg-green-500" : "",
+                            item.auditStatus === "failed" ? "bg-red-500" : "",
+                            item.auditStatus === "error" ? "bg-amber-500" : "",
+                            item.auditStatus === "missing" ? "bg-gray-400" : "",
+                          ].join(" ")}
+                        />
+                        <span
+                          className={[
+                            item.auditStatus === "passed" ? "text-green-600 dark:text-green-400" : "",
+                            item.auditStatus === "failed" ? "text-red-600 dark:text-red-400" : "",
+                            item.auditStatus === "error" ? "text-amber-600 dark:text-amber-400" : "",
+                            item.auditStatus === "missing" ? "text-gray-500 dark:text-gray-400" : "",
+                          ].join(" ")}
+                        >
+                          {item.auditStatus === "passed" && "安全审计通过"}
+                          {item.auditStatus === "failed" && "安全审计未通过"}
+                          {item.auditStatus === "error" && "审计异常"}
+                          {item.auditStatus === "missing" && "技能目录缺失"}
+                        </span>
+                        {item.auditIssues && item.auditIssues.length > 0 && (
+                          <span className="text-gray-400" title={item.auditIssues.join("\n")}>
+                            · {item.auditIssues.length} 项
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {item.type === "skill" && item.triggers && item.triggers.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {item.triggers.map((t) => (

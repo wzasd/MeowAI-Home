@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 
-router = APIRouter(prefix="/api/workflow", tags=["workflow"])
+router = APIRouter(prefix="/workflow", tags=["workflow"])
 
 # Global instances (set during app initialization)
 template_factory = None

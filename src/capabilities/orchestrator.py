@@ -1,4 +1,5 @@
 """Capability orchestrator facade — the main entry point for capability management."""
+import asyncio
 from pathlib import Path
 from typing import Dict, List, Literal, Optional
 
@@ -20,6 +21,7 @@ from src.capabilities.cli_adapters import (
 )
 from src.capabilities.mcp_probe import McpProbeResult
 from src.models.cat_registry import cat_registry
+from src.skills.security import SecurityAuditor
 
 
 PROVIDER_WRITERS = {
@@ -180,7 +182,7 @@ def toggle_capability(
     return cap
 
 
-def build_board_response(
+async def build_board_response(
     project_root: str,
     config: CapabilitiesConfig,
     probe_results: Optional[List[McpProbeResult]] = None,
@@ -189,6 +191,8 @@ def build_board_response(
     cat_ids = cat_registry.get_all_ids()
     items: List[CapabilityBoardItem] = []
     probe_map = {r.capabilityId: r for r in (probe_results or [])}
+
+    auditor = SecurityAuditor()
 
     for cap in config.capabilities:
         cats_map: Dict[str, bool] = {}
@@ -205,6 +209,7 @@ def build_board_response(
                 cats_map[cat_id] = override.enabled if override else cap.enabled
 
         probe = probe_map.get(cap.id) if cap.type == "mcp" else None
+
         items.append(
             CapabilityBoardItem(
                 id=cap.id,
@@ -217,7 +222,32 @@ def build_board_response(
                 connectionStatus=probe.connectionStatus if probe else None,
                 tools=probe.tools if probe else None,
                 probeError=probe.error if probe else None,
+                auditStatus=None,
+                auditIssues=None,
             )
         )
+
+    # Run security audits for skills in parallel
+    skill_items = [i for i in items if i.type == "skill"]
+    if skill_items:
+        audit_tasks = []
+        for item in skill_items:
+            skill_path = Path(project_root) / "skills" / item.id
+            if skill_path.exists():
+                audit_tasks.append((item, auditor.audit_skill(skill_path)))
+            else:
+                item.auditStatus = "missing"
+                item.auditIssues = ["技能目录不存在"]
+
+        if audit_tasks:
+            results = await asyncio.gather(*[t for _, t in audit_tasks], return_exceptions=True)
+            for idx, (item, _) in enumerate(audit_tasks):
+                report = results[idx]
+                if isinstance(report, Exception):
+                    item.auditStatus = "error"
+                    item.auditIssues = ["审计执行失败"]
+                else:
+                    item.auditStatus = "passed" if report.passed else "failed"
+                    item.auditIssues = [f"[{i.level}] {i.message}" for i in report.issues]
 
     return CapabilityBoardResponse(items=items, projectPath=project_root)

@@ -23,16 +23,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.secret = secret
         self.public_paths = public_paths or [
+            "/",
             "/webhook",
             "/health",
+            "/api/health",
             "/api/auth/login",
             "/api/auth/register",
+            "/api/review/webhook",
+            "/ws",
+            "/assets",
         ]
 
     async def dispatch(self, request: Request, call_next):
+        # Allow CORS preflight requests
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         # Check if path is public
         path = request.url.path
-        if any(path.startswith(p) for p in self.public_paths):
+        public_exact = {"/"}
+        public_prefixes = [p for p in self.public_paths if p != "/"]
+        if path in public_exact or any(path.startswith(p) for p in public_prefixes):
             return await call_next(request)
 
         # Extract and verify token

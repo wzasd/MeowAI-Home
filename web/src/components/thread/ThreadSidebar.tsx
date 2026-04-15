@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { useThreadStore } from "../../stores/threadStore";
 import { useCatStore } from "../../stores/catStore";
 import { ThreadItem } from "./ThreadItem";
-import { Plus, Search, X, Pin, Clock, Star, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Search, X, Pin, Clock, Star, ChevronDown, ChevronRight, Settings } from "lucide-react";
+import { ThemeToggle } from "../ui/ThemeToggle";
 
 interface ThreadSidebarProps {
   onCloseMobile?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function ThreadSidebar({ onCloseMobile }: ThreadSidebarProps) {
+export function ThreadSidebar({ onCloseMobile, onOpenSettings }: ThreadSidebarProps) {
   const threads = useThreadStore((s) => s.threads);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const fetchThreads = useThreadStore((s) => s.fetchThreads);
@@ -200,8 +202,20 @@ export function ThreadSidebar({ onCloseMobile }: ThreadSidebarProps) {
         )}
       </div>
 
-      <div className="border-t border-gray-100 p-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
-        v0.8.0 · MeowAI Home
+      <div className="border-t border-gray-100 p-3 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onOpenSettings}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+              title="设置"
+            >
+              <Settings size={18} />
+            </button>
+            <ThemeToggle />
+          </div>
+          <span className="text-xs text-gray-400 dark:text-gray-500">v0.8.0</span>
+        </div>
       </div>
     </div>
   );

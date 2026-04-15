@@ -1,4 +1,5 @@
 import aiosqlite
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -55,9 +56,17 @@ class SQLiteStore(ThreadStore, MessageStore):
                 content TEXT NOT NULL,
                 cat_id TEXT,
                 timestamp TEXT NOT NULL,
+                metadata TEXT,
                 FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE
             )
         """)
+
+        # Migration: add metadata column if it doesn't exist
+        try:
+            await db.execute("ALTER TABLE messages ADD COLUMN metadata TEXT")
+            await db.commit()
+        except Exception:
+            pass  # Column already exists
 
         # 索引
         await db.execute("""
@@ -196,14 +205,15 @@ class SQLiteStore(ThreadStore, MessageStore):
         """添加消息"""
         db = await self._get_db()
         await db.execute("""
-            INSERT INTO messages (thread_id, role, content, cat_id, timestamp)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO messages (thread_id, role, content, cat_id, timestamp, metadata)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, (
             thread_id,
             message.role,
             message.content,
             message.cat_id,
-            message.timestamp.isoformat()
+            message.timestamp.isoformat(),
+            json.dumps(message.metadata) if message.metadata else None
         ))
         await db.commit()
 
@@ -211,7 +221,7 @@ class SQLiteStore(ThreadStore, MessageStore):
         """分页获取消息"""
         db = await self._get_db()
         cursor = await db.execute(
-            """SELECT role, content, cat_id, timestamp FROM messages
+            """SELECT role, content, cat_id, timestamp, metadata FROM messages
                WHERE thread_id = ?
                ORDER BY timestamp ASC
                LIMIT ? OFFSET ?""",
@@ -224,7 +234,8 @@ class SQLiteStore(ThreadStore, MessageStore):
                 role=row[0],
                 content=row[1],
                 cat_id=row[2],
-                timestamp=datetime.fromisoformat(row[3])
+                timestamp=datetime.fromisoformat(row[3]),
+                metadata=json.loads(row[4]) if row[4] else None
             )
             for row in rows
         ]
@@ -233,7 +244,7 @@ class SQLiteStore(ThreadStore, MessageStore):
         """搜索消息内容"""
         db = await self._get_db()
         cursor = await db.execute(
-            """SELECT role, content, cat_id, timestamp FROM messages
+            """SELECT role, content, cat_id, timestamp, metadata FROM messages
                WHERE thread_id = ? AND content LIKE ?
                ORDER BY timestamp ASC""",
             (thread_id, f"%{query}%")
@@ -245,7 +256,8 @@ class SQLiteStore(ThreadStore, MessageStore):
                 role=row[0],
                 content=row[1],
                 cat_id=row[2],
-                timestamp=datetime.fromisoformat(row[3])
+                timestamp=datetime.fromisoformat(row[3]),
+                metadata=json.loads(row[4]) if row[4] else None
             )
             for row in rows
         ]

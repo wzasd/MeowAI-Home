@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCatStore } from "../../stores/catStore";
-import { Shield, Check, X } from "lucide-react";
+import { Shield, Check, X, Loader2 } from "lucide-react";
 
 interface Permission {
   id: string;
@@ -30,7 +30,14 @@ export function PermissionsSettings() {
   const cats = useCatStore((s) => s.cats);
   const updateCat = useCatStore((s) => s.updateCat);
   const fetchCats = useCatStore((s) => s.fetchCats);
+  const storeLoading = useCatStore((s) => s.loading);
   const [toggling, setToggling] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cats.length === 0) {
+      fetchCats();
+    }
+  }, [fetchCats, cats.length]);
 
   const handleToggle = async (catId: string, permId: string, riskLevel: string) => {
     const cat = cats.find((c) => c.id === catId);
@@ -63,7 +70,23 @@ export function PermissionsSettings() {
     }
   };
 
-  const displayCats = cats.slice(0, 5);
+  if (storeLoading && cats.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">加载猫咪配置中...</span>
+      </div>
+    );
+  }
+
+  if (cats.length === 0) {
+    return (
+      <div className="py-8 text-center text-gray-400">
+        <p className="text-sm">暂无猫咪配置</p>
+        <p className="mt-1 text-xs">请先在「猫咪管理」中配置 Agent</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -77,8 +100,8 @@ export function PermissionsSettings() {
             <tr className="border-b border-gray-200 text-xs text-gray-500 dark:border-gray-700">
               <th className="px-3 py-2 text-left">权限</th>
               <th className="px-3 py-2 text-left">风险</th>
-              {displayCats.map((cat) => (
-                <th key={cat.id} className="px-3 py-2 text-center">
+              {cats.map((cat) => (
+                <th key={cat.id} className="px-3 py-2 text-center min-w-[80px]">
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{cat.displayName || cat.name}</span>
                 </th>
               ))}
@@ -98,7 +121,7 @@ export function PermissionsSettings() {
                     {perm.riskLevel === "low" ? "低" : perm.riskLevel === "medium" ? "中" : "高"}
                   </span>
                 </td>
-                {displayCats.map((cat) => {
+                {cats.map((cat) => {
                   const enabled = cat.permissions?.includes(perm.id) ?? false;
                   const key = `${cat.id}:${perm.id}`;
                   const isToggling = toggling === key;
@@ -125,7 +148,7 @@ export function PermissionsSettings() {
       </div>
 
       {/* Risk legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1">
           <Shield size={12} /> 权限说明
         </span>

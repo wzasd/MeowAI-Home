@@ -1,6 +1,6 @@
 /** Mission Hub — task board with backlog, features, and dependency tracking. */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   LayoutGrid,
   List,
@@ -15,6 +15,10 @@ import {
   AlertCircle,
   Loader2,
   X,
+  GitBranch,
+  Zap,
+  Layers,
+  Settings2,
 } from "lucide-react";
 import {
   useMissions,
@@ -22,6 +26,7 @@ import {
   type TaskStatus,
   type Priority,
 } from "../../hooks/useMissions";
+import { useWorkflows } from "../../hooks/useWorkflows";
 
 const PRIORITY_COLORS: Record<Priority, string> = {
   P0: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -280,6 +285,214 @@ function CreateTaskModal({
   );
 }
 
+function WorkflowTab() {
+  const { templates, active, loading, error, fetchWorkflows } = useWorkflows();
+
+  return (
+    <div className="h-full overflow-auto p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">工作流模板</h3>
+        <button
+          onClick={fetchWorkflows}
+          className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          刷新
+        </button>
+      </div>
+      {loading && <Loader2 size={20} className="animate-spin text-gray-400" />}
+      {error && <div className="text-xs text-red-500">{error}</div>}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {templates.map((t) => (
+          <div
+            key={t.id}
+            className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
+              <GitBranch size={14} className="text-blue-500" />
+              {t.name}
+            </div>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.description}</p>
+          </div>
+        ))}
+      </div>
+
+      <h3 className="mb-3 mt-6 text-sm font-semibold text-gray-800 dark:text-gray-200">活跃工作流</h3>
+      {active.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center text-xs text-gray-400 dark:border-gray-700">
+          暂无活跃工作流
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {active.map((w) => (
+            <div
+              key={w.id}
+              className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <span className="text-sm text-gray-800 dark:text-gray-200">{w.name || w.id}</span>
+              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                {w.status || "running"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeaturesTab({ tasks }: { tasks: MissionTask[] }) {
+  const features = useMemo(() => {
+    const map = new Map<string, MissionTask[]>();
+    tasks.forEach((t) => {
+      const key = t.tags[0] || "未分类";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    });
+    return Array.from(map.entries()).map(([name, ft]) => ({
+      name,
+      total: ft.length,
+      done: ft.filter((x) => x.status === "done").length,
+      doing: ft.filter((x) => x.status === "doing").length,
+      blocked: ft.filter((x) => x.status === "blocked").length,
+      progress: ft.length > 0 ? Math.round((ft.filter((x) => x.status === "done").length / ft.length) * 100) : 0,
+    }));
+  }, [tasks]);
+
+  return (
+    <div className="h-full overflow-auto p-4">
+      <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
+        <BarChart3 size={16} />
+        功能模块进度
+      </div>
+      {features.length === 0 ? (
+        <div className="flex h-64 items-center justify-center text-gray-400">
+          暂无功能数据
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((f) => (
+            <div
+              key={f.name}
+              className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200">{f.name}</h4>
+                <span className="text-xs text-gray-500">{f.progress}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                <div className="h-full rounded-full bg-green-500" style={{ width: `${f.progress}%` }} />
+              </div>
+              <div className="mt-2 flex gap-3 text-[10px] text-gray-500 dark:text-gray-400">
+                <span>{f.total} 任务</span>
+                <span className="text-green-600">{f.done} 完成</span>
+                <span className="text-amber-600">{f.doing} 进行中</span>
+                {f.blocked > 0 && <span className="text-red-600">{f.blocked} 阻塞</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResolutionsTab({ tasks, onStatusChange }: { tasks: MissionTask[]; onStatusChange?: (id: string, status: TaskStatus) => void }) {
+  const blocked = tasks.filter((t) => t.status === "blocked");
+  const dueSoon = tasks.filter((t) => {
+    if (!t.dueDate || t.status === "done") return false;
+    const due = new Date(t.dueDate);
+    const now = new Date();
+    const diff = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    return diff <= 3;
+  });
+  const unassigned = tasks.filter((t) => !t.ownerCat && t.status !== "done");
+
+  return (
+    <div className="h-full overflow-auto p-4">
+      {blocked.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-2 flex items-center gap-1 text-sm font-semibold text-red-600">
+            <AlertTriangle size={14} /> 阻塞项 ({blocked.length})
+          </h3>
+          <div className="space-y-2">
+            {blocked.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-3 dark:border-red-900/30 dark:bg-red-900/10"
+              >
+                <div>
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.title}</div>
+                  <div className="text-xs text-gray-500">{t.description}</div>
+                </div>
+                {onStatusChange && (
+                  <button
+                    onClick={() => onStatusChange(t.id, "todo")}
+                    className="rounded bg-white px-2 py-1 text-xs text-gray-700 shadow-sm hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200"
+                  >
+                    解除阻塞
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dueSoon.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-2 flex items-center gap-1 text-sm font-semibold text-amber-600">
+            <Clock size={14} /> 即将到期 ({dueSoon.length})
+          </h3>
+          <div className="space-y-2">
+            {dueSoon.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 p-3 dark:border-amber-900/30 dark:bg-amber-900/10"
+              >
+                <div>
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.title}</div>
+                  <div className="text-xs text-gray-500">截止: {t.dueDate}</div>
+                </div>
+                <span className="rounded bg-white px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-gray-700">
+                  {t.priority}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {unassigned.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-2 flex items-center gap-1 text-sm font-semibold text-blue-600">
+            <User size={14} /> 待分配 ({unassigned.length})
+          </h3>
+          <div className="space-y-2">
+            {unassigned.map((t) => (
+              <div
+                key={t.id}
+                className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+              >
+                <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.title}</div>
+                <div className="text-xs text-gray-500">{t.description}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {blocked.length === 0 && dueSoon.length === 0 && unassigned.length === 0 && (
+        <div className="flex h-64 items-center justify-center text-gray-400">
+          <div className="text-center">
+            <CheckCircle2 size={32} className="mx-auto mb-2 text-green-500" />
+            <p>当前无需要处理的风险项</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MissionHubPage() {
   const {
     tasks,
@@ -294,11 +507,10 @@ export function MissionHubPage() {
   } = useMissions();
 
   const [view, setView] = useState<"kanban" | "list">("kanban");
-  const [tab, setTab] = useState<"board" | "features" | "risks">("board");
+  const [tab, setTab] = useState<"projects" | "workflows" | "features" | "resolutions">("projects");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const filtered = filterPriority === "all" ? tasks : tasks.filter((t) => t.priority === filterPriority);
-
   const columns: TaskStatus[] = ["backlog", "todo", "doing", "blocked", "done"];
 
   const handleCreateTask = async (taskData: Omit<MissionTask, "id" | "createdAt">) => {
@@ -322,57 +534,66 @@ export function MissionHubPage() {
             >
               <Plus size={12} /> 新任务
             </button>
-            <div className="flex rounded border border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setView("kanban")}
-                className={`rounded-l px-2 py-1 ${view === "kanban" ? "bg-gray-100 dark:bg-gray-700" : ""}`}
-              >
-                <LayoutGrid size={14} className="text-gray-600 dark:text-gray-400" />
-              </button>
-              <button
-                onClick={() => setView("list")}
-                className={`rounded-r px-2 py-1 ${view === "list" ? "bg-gray-100 dark:bg-gray-700" : ""}`}
-              >
-                <List size={14} className="text-gray-600 dark:text-gray-400" />
-              </button>
-            </div>
+            {tab === "projects" && (
+              <div className="flex rounded border border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setView("kanban")}
+                  className={`rounded-l px-2 py-1 ${view === "kanban" ? "bg-gray-100 dark:bg-gray-700" : ""}`}
+                >
+                  <LayoutGrid size={14} className="text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
+                  onClick={() => setView("list")}
+                  className={`rounded-r px-2 py-1 ${view === "list" ? "bg-gray-100 dark:bg-gray-700" : ""}`}
+                >
+                  <List size={14} className="text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="mt-2 flex items-center justify-between">
           <div className="flex gap-1">
-            {(["board", "features", "risks"] as const).map((t) => (
+            {[
+              { key: "projects" as const, label: "项目", icon: Layers },
+              { key: "workflows" as const, label: "工作流", icon: GitBranch },
+              { key: "features" as const, label: "功能", icon: Zap },
+              { key: "resolutions" as const, label: "决议队列", icon: Settings2 },
+            ].map((t) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`rounded px-3 py-1 text-xs font-medium ${
-                  tab === t ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex items-center gap-1 rounded px-3 py-1 text-xs font-medium ${
+                  tab === t.key ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
                 }`}
               >
-                {t === "board" ? "看板" : t === "features" ? "功能" : "风险"}
+                <t.icon size={12} /> {t.label}
               </button>
             ))}
           </div>
-          <StatsBar tasks={tasks} loading={loading} stats={stats} />
+          {tab === "projects" && <StatsBar tasks={tasks} loading={loading} stats={stats} />}
         </div>
 
-        {/* Priority filter */}
-        <div className="mt-2 flex items-center gap-1">
-          <span className="text-xs text-gray-400">筛选:</span>
-          {(["all", "P0", "P1", "P2", "P3"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setFilterPriority(p)}
-              className={`rounded px-2 py-0.5 text-[10px] font-medium ${
-                filterPriority === p
-                  ? PRIORITY_COLORS[p as Priority] || "bg-gray-200 text-gray-800"
-                  : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
-            >
-              {p === "all" ? "全部" : p}
-            </button>
-          ))}
-        </div>
+        {/* Priority filter — projects only */}
+        {tab === "projects" && (
+          <div className="mt-2 flex items-center gap-1">
+            <span className="text-xs text-gray-400">筛选:</span>
+            {(["all", "P0", "P1", "P2", "P3"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setFilterPriority(p)}
+                className={`rounded px-2 py-0.5 text-[10px] font-medium ${
+                  filterPriority === p
+                    ? PRIORITY_COLORS[p as Priority] || "bg-gray-200 text-gray-800"
+                    : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+              >
+                {p === "all" ? "全部" : p}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Error message */}
@@ -387,63 +608,54 @@ export function MissionHubPage() {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-x-auto p-4">
-        {loading && tasks.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <Loader2 size={32} className="animate-spin text-gray-400" />
-          </div>
-        ) : tab === "board" && view === "kanban" ? (
-          <div className="flex gap-4" style={{ minWidth: columns.length * 280 }}>
-            {columns.map((status) => (
-              <KanbanColumn
-                key={status}
-                status={status}
-                tasks={filtered.filter((t) => t.status === status)}
-                onStatusChange={handleStatusChange}
-              />
-            ))}
-          </div>
-        ) : tab === "board" && view === "list" ? (
-          <div className="space-y-2">
-            {filtered.map((task) => {
-              const cfg = STATUS_CONFIG[task.status];
-              const CfgIcon = cfg.icon;
-              return (
-                <div
-                  key={task.id}
-                  className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200">{task.title}</h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{task.description}</p>
-                  </div>
-                  <span className="flex items-center gap-0.5 text-xs">
-                    <CfgIcon size={12} className={cfg.color} />
-                    <span className="text-gray-500 dark:text-gray-400">{cfg.label}</span>
-                  </span>
-                  {task.ownerCat && <span className="text-xs text-purple-600 dark:text-purple-400">@{task.ownerCat}</span>}
-                </div>
-              );
-            })}
-          </div>
-        ) : tab === "features" ? (
-          <div className="flex h-full items-center justify-center text-gray-400">
-            <div className="text-center">
-              <BarChart3 size={32} className="mx-auto mb-2" />
-              <p>功能进度追踪面板</p>
-              <p className="text-sm">按功能模块追踪整体完成度</p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center text-gray-400">
-            <div className="text-center">
-              <AlertTriangle size={32} className="mx-auto mb-2" />
-              <p>风险评估面板</p>
-              <p className="text-sm">展示阻塞项和延期风险</p>
-            </div>
+      <div className="flex-1 overflow-hidden">
+        {tab === "projects" && (
+          <div className="h-full overflow-x-auto p-4">
+            {loading && tasks.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <Loader2 size={32} className="animate-spin text-gray-400" />
+              </div>
+            ) : view === "kanban" ? (
+              <div className="flex gap-4" style={{ minWidth: columns.length * 280 }}>
+                {columns.map((status) => (
+                  <KanbanColumn
+                    key={status}
+                    status={status}
+                    tasks={filtered.filter((t) => t.status === status)}
+                    onStatusChange={handleStatusChange}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filtered.map((task) => {
+                  const cfg = STATUS_CONFIG[task.status];
+                  const CfgIcon = cfg.icon;
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+                    >
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200">{task.title}</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{task.description}</p>
+                      </div>
+                      <span className="flex items-center gap-0.5 text-xs">
+                        <CfgIcon size={12} className={cfg.color} />
+                        <span className="text-gray-500 dark:text-gray-400">{cfg.label}</span>
+                      </span>
+                      {task.ownerCat && <span className="text-xs text-purple-600 dark:text-purple-400">@{task.ownerCat}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
+        {tab === "workflows" && <WorkflowTab />}
+        {tab === "features" && <FeaturesTab tasks={tasks} />}
+        {tab === "resolutions" && <ResolutionsTab tasks={tasks} onStatusChange={handleStatusChange} />}
       </div>
 
       {/* Create Task Modal */}

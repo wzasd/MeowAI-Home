@@ -2,41 +2,25 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useThreadStore } from "../stores/threadStore";
+import { api } from "../api/client";
+import type {
+  WorktreeEntry,
+  TreeNode,
+  FileData,
+  SearchResult,
+  GitStatus,
+  TerminalResult,
+} from "../api/client";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-export interface WorktreeEntry {
-  id: string;
-  root: string;
-  branch: string;
-  head: string;
-}
-
-export interface TreeNode {
-  name: string;
-  path: string;
-  type: "file" | "directory";
-  children?: TreeNode[];
-}
-
-export interface FileData {
-  path: string;
-  content: string;
-  sha256: string;
-  size: number;
-  mime: string;
-  truncated: boolean;
-  binary?: boolean;
-}
-
-export interface SearchResult {
-  path: string;
-  line: number;
-  content: string;
-  contextBefore: string;
-  contextAfter: string;
-  matchType?: "filename" | "content";
-}
+export type {
+  WorktreeEntry,
+  TreeNode,
+  FileData,
+  SearchResult,
+  GitStatusItem,
+  GitStatus,
+  TerminalResult,
+} from "../api/client";
 
 function mergeSubtree(nodes: TreeNode[], targetPath: string, children: TreeNode[]): TreeNode[] {
   return nodes.map((node) => {
@@ -66,17 +50,14 @@ export function useWorkspace() {
   // Fetch worktrees
   const fetchWorktrees = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/workspace/worktrees`);
-      if (res.ok) {
-        const data = await res.json();
-        setWorktrees(data.worktrees ?? []);
-        // Auto-select current thread's worktree or first available
-        const current = data.worktrees.find((w: WorktreeEntry) => w.id === currentThreadId);
-        if (current) {
-          setWorktreeId(current.id);
-        } else if (data.worktrees.length > 0 && !worktreeId) {
-          setWorktreeId(data.worktrees[0].id);
-        }
+      const data = await api.workspace.listWorktrees();
+      setWorktrees(data.worktrees ?? []);
+      // Auto-select current thread's worktree or first available
+      const current = data.worktrees.find((w: WorktreeEntry) => w.id === currentThreadId);
+      if (current) {
+        setWorktreeId(current.id);
+      } else if (data.worktrees.length > 0 && !worktreeId) {
+        setWorktreeId(data.worktrees[0].id);
       }
     } catch {
       /* ignore */
@@ -94,15 +75,8 @@ export function useWorkspace() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ worktreeId, depth: "3" });
-        if (subpath) params.set("path", subpath);
-        const res = await fetch(`${API_BASE}/api/workspace/tree?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          setTree(data.tree ?? []);
-        } else {
-          setError("Failed to load file tree");
-        }
+        const data = await api.workspace.getTree(worktreeId, subpath, 3);
+        setTree(data.tree ?? []);
       } catch {
         setError("Failed to load file tree");
       } finally {
@@ -121,10 +95,7 @@ export function useWorkspace() {
     async (dirPath: string) => {
       if (!worktreeId) return;
       try {
-        const params = new URLSearchParams({ worktreeId, path: dirPath, depth: "3" });
-        const res = await fetch(`${API_BASE}/api/workspace/tree?${params}`);
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await api.workspace.getTree(worktreeId, dirPath, 3);
         const subtreeChildren: TreeNode[] = data.tree ?? [];
         setTree((prev) => mergeSubtree(prev, dirPath, subtreeChildren));
       } catch {
@@ -141,17 +112,10 @@ export function useWorkspace() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ worktreeId, path });
-        const res = await fetch(`${API_BASE}/api/workspace/file?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          setFile(data);
-        } else {
-          const data = await res.json().catch(() => ({ error: "Unknown error" }));
-          setError(data.error ?? "Failed to load file");
-        }
-      } catch {
-        setError("Failed to load file");
+        const data = await api.workspace.getFile(worktreeId, path);
+        setFile(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load file");
       } finally {
         setLoading(false);
       }
@@ -172,15 +136,8 @@ export function useWorkspace() {
       setSearchLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE}/api/workspace/search`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ worktreeId, query, type }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.results ?? []);
-        }
+        const data = await api.workspace.search(worktreeId, query, type);
+        setSearchResults(data.results ?? []);
       } catch {
         setSearchResults([]);
         setError("Failed to search workspace");
@@ -196,13 +153,49 @@ export function useWorkspace() {
     async (path: string) => {
       if (!worktreeId) return;
       try {
-        await fetch(`${API_BASE}/api/workspace/reveal`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ worktreeId, path }),
-        });
+        await api.workspace.reveal(worktreeId, path);
       } catch {
         /* ignore */
+      }
+    },
+    [worktreeId]
+  );
+
+  // Git status
+  const gitStatus = useCallback(async (): Promise<GitStatus | null> => {
+    if (!worktreeId) return null;
+    try {
+      return await api.workspace.gitStatus(worktreeId);
+    } catch {
+      return null;
+    }
+  }, [worktreeId]);
+
+  // Git diff
+  const gitDiff = useCallback(async (path?: string): Promise<string> => {
+    if (!worktreeId) return "";
+    try {
+      const data = await api.workspace.gitDiff(worktreeId, path);
+      return data.diff || "";
+    } catch {
+      return "";
+    }
+  }, [worktreeId]);
+
+  // Terminal command
+  const runCommand = useCallback(
+    async (command: string): Promise<TerminalResult> => {
+      if (!worktreeId) {
+        return { stdout: "", stderr: "No worktree selected", returncode: -1 };
+      }
+      try {
+        return await api.workspace.runCommand(worktreeId, command);
+      } catch (err) {
+        return {
+          stdout: "",
+          stderr: err instanceof Error ? err.message : "Failed to execute command",
+          returncode: -1,
+        };
       }
     },
     [worktreeId]
@@ -226,5 +219,8 @@ export function useWorkspace() {
     search,
     setSearchResults,
     revealInFinder,
+    gitStatus,
+    gitDiff,
+    runCommand,
   };
 }

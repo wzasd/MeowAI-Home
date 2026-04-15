@@ -4,8 +4,10 @@ import tempfile
 from pathlib import Path
 from httpx import AsyncClient, ASGITransport
 
+from src.auth.store import AuthStore
 from src.thread.thread_manager import ThreadManager
 from src.web.app import create_app
+from tests.web.conftest import authenticate_client
 
 
 @pytest.fixture
@@ -36,8 +38,13 @@ async def app_client():
         app.state.cat_registry = cat_reg
         app.state.agent_registry = agent_reg
 
+        auth_store = AuthStore(db_path=db_path)
+        await auth_store.initialize()
+        app.state.auth_store = auth_store
+
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await authenticate_client(client)
             yield client
 
         ThreadManager.reset()

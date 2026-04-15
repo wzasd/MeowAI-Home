@@ -23,7 +23,7 @@ async def get_capabilities(project_path: str, probe: bool = False) -> Dict[str, 
     probe_results = None
     if probe:
         probe_results = await probe_mcp_capabilities(config.capabilities)
-    response = build_board_response(project_path, config, probe_results=probe_results)
+    response = await build_board_response(project_path, config, probe_results=probe_results)
     return response.model_dump()
 
 

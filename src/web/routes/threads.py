@@ -43,6 +43,7 @@ def _thread_to_detail(thread) -> ThreadDetailResponse:
                 content=m.content,
                 cat_id=m.cat_id,
                 timestamp=m.timestamp,
+                metadata=m.metadata,
             )
             for m in thread.messages
         ],

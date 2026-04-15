@@ -3,7 +3,8 @@ import { Send, Gamepad2, Lightbulb, Wrench, HelpCircle, X, Reply } from "lucide-
 import { useChatStore } from "../../stores/chatStore";
 import { useThreadStore } from "../../stores/threadStore";
 import { VoiceInput } from "./VoiceInput";
-import type { MessageResponse } from "../../types";
+import { FileUpload, AttachmentChip } from "./FileUpload";
+import type { MessageResponse, Attachment } from "../../types";
 
 interface InputBarProps {
   disabled?: boolean;
@@ -98,6 +99,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
 
 export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarProps) {
   const [text, setText] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const startStreaming = useChatStore((s) => s.startStreaming);
@@ -156,14 +158,15 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
   );
 
   const handleSend = () => {
-    if (!text.trim() || disabled) return;
+    if ((!text.trim() && attachments.length === 0) || disabled) return;
     startStreaming();
 
     const event = new CustomEvent("meowai:send", {
-      detail: { content: text.trim() },
+      detail: { content: text.trim(), attachments },
     });
     window.dispatchEvent(event);
     setText("");
+    setAttachments([]);
     setShowMentions(false);
 
     if (textareaRef.current) {
@@ -405,10 +408,29 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
         </div>
       )}
 
+      {/* Attachment chips */}
+      {attachments.length > 0 && (
+        <div className="mx-auto mb-2 flex max-w-4xl flex-wrap gap-2">
+          {attachments.map((att, idx) => (
+            <AttachmentChip
+              key={`${att.name}-${idx}`}
+              attachment={att}
+              onRemove={() =>
+                setAttachments((prev) => prev.filter((_, i) => i !== idx))
+              }
+            />
+          ))}
+        </div>
+      )}
       <div className="mx-auto flex max-w-4xl items-end gap-2">
         <VoiceInput
           onTranscript={(t) => setText((prev) => prev + t)}
           disabled={disabled}
+        />
+        <FileUpload
+          threadId={currentThreadId}
+          disabled={disabled}
+          onUpload={(att) => setAttachments((prev) => [...prev, att])}
         />
         <textarea
           ref={textareaRef}
@@ -422,7 +444,7 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
         />
         <button
           onClick={handleSend}
-          disabled={disabled || !text.trim()}
+          disabled={disabled || (!text.trim() && attachments.length === 0)}
           className="rounded-xl bg-blue-500 p-2.5 text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Send size={18} />

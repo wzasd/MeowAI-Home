@@ -215,3 +215,26 @@ class TestArticleStore:
 
         updated = store.get_by_id(article_id)
         assert updated["status"] == "read"
+
+    def test_notes(self, store, sample_article):
+        store.store(sample_article)
+
+        article_hash = sample_article.content_hash
+        retrieved = store.get_by_hash(article_hash)
+        article_id = retrieved["id"]
+
+        # Default notes should be empty
+        assert store.get_notes(article_id) == ""
+
+        # Save notes
+        result = store.save_notes(article_id, "This is a study note.")
+        assert result is True
+        assert store.get_notes(article_id) == "This is a study note."
+
+        # Update notes
+        store.save_notes(article_id, "Updated note.")
+        assert store.get_notes(article_id) == "Updated note."
+
+    def test_notes_nonexistent(self, store):
+        assert store.get_notes(99999) == ""
+        assert store.save_notes(99999, "note") is False

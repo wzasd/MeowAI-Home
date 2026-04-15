@@ -31,6 +31,7 @@ async def get_messages(
                 content=m.content,
                 cat_id=m.cat_id,
                 timestamp=m.timestamp,
+                metadata=m.metadata,
             )
             for m in messages
         ],

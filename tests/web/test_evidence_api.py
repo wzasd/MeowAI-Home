@@ -11,9 +11,14 @@ from src.evidence.store import EvidenceStore, EvidenceDoc
 
 @pytest.fixture
 def client():
-    """Create test client."""
+    """Create authenticated test client."""
     app = create_app()
-    return TestClient(app)
+    with TestClient(app) as c:
+        c.post("/api/auth/register", json={"username": "testuser", "password": "testpass", "role": "admin"})
+        resp = c.post("/api/auth/login", json={"username": "testuser", "password": "testpass"})
+        token = resp.json()["access_token"]
+        c.headers["Authorization"] = f"Bearer {token}"
+        yield c
 
 
 @pytest.fixture

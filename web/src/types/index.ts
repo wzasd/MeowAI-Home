@@ -22,6 +22,13 @@ export interface ThreadDetailResponse {
   project_path?: string;
 }
 
+export interface Attachment {
+  name: string;
+  size: number;
+  mimeType: string;
+  url: string;
+}
+
 export interface MessageResponse {
   role: "user" | "assistant";
   content: string;
@@ -149,6 +156,29 @@ export interface AccountListResponse {
   accounts: AccountResponse[];
 }
 
+export interface AuthUserResponse {
+  username: string;
+  role: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  role?: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  username: string;
+  role: string;
+}
+
 export interface TestKeyResponse {
   valid: boolean;
   error?: string;
@@ -165,6 +195,8 @@ export interface CapabilityBoardItem {
   connectionStatus?: "connected" | "error" | "timeout" | "unsupported";
   tools?: Array<{ name: string; description?: string }>;
   probeError?: string;
+  auditStatus?: "passed" | "failed" | "error" | "missing";
+  auditIssues?: string[];
 }
 
 export interface CapabilityBoardResponse {

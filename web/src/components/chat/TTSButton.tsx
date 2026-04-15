@@ -1,58 +1,60 @@
-/** TTS (Text-to-Speech) button for reading messages aloud */
+/** TTS (Text-to-Speech) button using backend Edge TTS */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Volume2, VolumeX, Loader2 } from "lucide-react";
+import { api } from "../../api/client";
+import { useThreadStore } from "../../stores/threadStore";
 
 interface TTSButtonProps {
   content: string;
+  catId: string;
   catName?: string;
 }
 
 type TTSState = "idle" | "loading" | "playing";
 
-export function TTSButton({ content, catName = "猫咪" }: TTSButtonProps) {
+export function TTSButton({ content, catId, catName = "猫咪" }: TTSButtonProps) {
   const [state, setState] = useState<TTSState>("idle");
-  const [, setUtterance] = useState<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
 
   const stopSpeaking = useCallback(() => {
-    window.speechSynthesis.cancel();
+    audioRef.current?.pause();
+    audioRef.current = null;
     setState("idle");
-    setUtterance(null);
   }, []);
 
-  const startSpeaking = useCallback(() => {
-    if (!window.speechSynthesis) {
-      console.warn("Browser does not support speech synthesis");
+  const startSpeaking = useCallback(async () => {
+    if (!currentThreadId) {
+      console.warn("No active thread for TTS");
       return;
     }
 
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-
+    stopSpeaking();
     setState("loading");
 
-    const u = new SpeechSynthesisUtterance(content);
-    u.lang = "zh-CN";
-    u.rate = 1;
-    u.pitch = 1;
+    try {
+      const blob = await api.voice.tts(content, catId, currentThreadId);
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
 
-    u.onstart = () => {
-      setState("playing");
-    };
+      audio.onplay = () => setState("playing");
+      audio.onended = () => {
+        setState("idle");
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => {
+        setState("idle");
+        URL.revokeObjectURL(url);
+      };
 
-    u.onend = () => {
+      await audio.play();
+    } catch (e) {
+      console.error("TTS failed:", e);
       setState("idle");
-      setUtterance(null);
-    };
-
-    u.onerror = () => {
-      setState("idle");
-      setUtterance(null);
-    };
-
-    setUtterance(u);
-    window.speechSynthesis.speak(u);
-  }, [content]);
+    }
+  }, [content, catId, currentThreadId, stopSpeaking]);
 
   const handleClick = () => {
     if (state === "playing") {
@@ -61,15 +63,6 @@ export function TTSButton({ content, catName = "猫咪" }: TTSButtonProps) {
       startSpeaking();
     }
   };
-
-  // Cleanup on unmount
-  // useEffect(() => {
-  //   return () => {
-  //     if (utterance) {
-  //       window.speechSynthesis.cancel();
-  //     }
-  //   };
-  // }, [utterance]);
 
   const icons: Record<TTSState, React.ReactNode> = {
     idle: <Volume2 size={14} />,

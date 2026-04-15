@@ -15,6 +15,8 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
+  Save,
+  MessageSquare,
 } from "lucide-react";
 import {
   useSignals,
@@ -106,15 +108,44 @@ function ArticleDetail({
   article,
   onStatusChange,
   onStar,
+  getNotes,
+  saveNotes,
+  generatePodcast,
+  generateResearch,
 }: {
   article: SignalArticle;
   onStatusChange: (id: string, status: ArticleStatus) => Promise<boolean>;
   onStar: (id: string) => Promise<boolean>;
+  getNotes: (id: string) => Promise<string>;
+  saveNotes: (id: string, notes: string) => Promise<boolean>;
+  generatePodcast: (id: string) => Promise<Blob>;
+  generateResearch: (id: string) => Promise<{ summary: string }>;
 }) {
   const [studyMode, setStudyMode] = useState(false);
   const [notes, setNotes] = useState("");
   const [isMarkingRead, setIsMarkingRead] = useState(false);
   const [isStarring, setIsStarring] = useState(false);
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [isGeneratingPodcast, setIsGeneratingPodcast] = useState(false);
+  const [isGeneratingResearch, setIsGeneratingResearch] = useState(false);
+  const [podcastUrl, setPodcastUrl] = useState<string | null>(null);
+  const [researchReport, setResearchReport] = useState<string | null>(null);
+
+  // Load notes when article changes or study mode opens
+  useEffect(() => {
+    if (studyMode) {
+      getNotes(article.id).then(setNotes);
+    }
+  }, [article.id, studyMode, getNotes]);
+
+  // Revoke podcast URL on unmount / article change
+  useEffect(() => {
+    return () => {
+      if (podcastUrl) {
+        URL.revokeObjectURL(podcastUrl);
+      }
+    };
+  }, [article.id, podcastUrl]);
 
   const handleMarkRead = async () => {
     setIsMarkingRead(true);
@@ -126,6 +157,38 @@ function ArticleDetail({
     setIsStarring(true);
     await onStar(article.id);
     setIsStarring(false);
+  };
+
+  const handleSaveNotes = async () => {
+    setIsSavingNotes(true);
+    await saveNotes(article.id, notes);
+    setIsSavingNotes(false);
+  };
+
+  const handleGeneratePodcast = async () => {
+    setIsGeneratingPodcast(true);
+    try {
+      const blob = await generatePodcast(article.id);
+      if (podcastUrl) URL.revokeObjectURL(podcastUrl);
+      const url = URL.createObjectURL(blob);
+      setPodcastUrl(url);
+    } catch (e) {
+      console.error("Podcast generation failed:", e);
+    } finally {
+      setIsGeneratingPodcast(false);
+    }
+  };
+
+  const handleGenerateResearch = async () => {
+    setIsGeneratingResearch(true);
+    try {
+      const report = await generateResearch(article.id);
+      setResearchReport(report.summary);
+    } catch (e) {
+      console.error("Research generation failed:", e);
+    } finally {
+      setIsGeneratingResearch(false);
+    }
   };
 
   return (
@@ -210,25 +273,66 @@ function ArticleDetail({
           学习模式
         </button>
         {studyMode && (
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 space-y-3">
+            {/* Notes */}
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
-              <h5 className="text-xs font-semibold text-blue-700 dark:text-blue-400">学习笔记</h5>
+              <div className="flex items-center justify-between">
+                <h5 className="text-xs font-semibold text-blue-700 dark:text-blue-400">学习笔记</h5>
+                <button
+                  onClick={handleSaveNotes}
+                  disabled={isSavingNotes}
+                  className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-[10px] text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isSavingNotes ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                  保存
+                </button>
+              </div>
               <textarea
                 className="mt-2 w-full rounded border border-blue-200 bg-white p-2 text-sm dark:border-blue-700 dark:bg-gray-800 dark:text-white"
-                rows={3}
+                rows={4}
                 placeholder="记录你的学习心得..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
             </div>
-            <div className="flex gap-2">
-              <button className="flex items-center gap-1 rounded bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700">
-                <Play size={12} /> 生成播客
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleGeneratePodcast}
+                disabled={isGeneratingPodcast}
+                className="flex items-center gap-1 rounded bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {isGeneratingPodcast ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                生成播客
               </button>
-              <button className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700">
-                讨论
+              <button
+                onClick={handleGenerateResearch}
+                disabled={isGeneratingResearch}
+                className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isGeneratingResearch ? <Loader2 size={12} className="animate-spin" /> : <MessageSquare size={12} />}
+                讨论（多猫研报）
               </button>
             </div>
+
+            {/* Podcast player */}
+            {podcastUrl && (
+              <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+                <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">播客预览</p>
+                <audio src={podcastUrl} controls className="w-full" />
+              </div>
+            )}
+
+            {/* Research report */}
+            {researchReport && (
+              <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+                <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">多猫研究报告</p>
+                <div className="max-h-64 overflow-y-auto whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+                  {researchReport}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -309,6 +413,10 @@ export function SignalInboxPage() {
     updateArticleStatus,
     starArticle,
     refreshSource,
+    getNotes,
+    saveNotes,
+    generatePodcast,
+    generateResearch,
   } = useSignals();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -446,6 +554,10 @@ export function SignalInboxPage() {
                 article={selectedArticle}
                 onStatusChange={updateArticleStatus}
                 onStar={starArticle}
+                getNotes={getNotes}
+                saveNotes={saveNotes}
+                generatePodcast={generatePodcast}
+                generateResearch={generateResearch}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-gray-400">

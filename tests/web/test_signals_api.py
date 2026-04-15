@@ -8,9 +8,14 @@ from src.web.app import create_app
 
 @pytest.fixture
 def client():
-    """Create test client."""
+    """Create authenticated test client."""
     app = create_app()
-    return TestClient(app)
+    with TestClient(app) as c:
+        c.post("/api/auth/register", json={"username": "testuser", "password": "testpass", "role": "admin"})
+        resp = c.post("/api/auth/login", json={"username": "testuser", "password": "testpass"})
+        token = resp.json()["access_token"]
+        c.headers["Authorization"] = f"Bearer {token}"
+        yield c
 
 
 class TestListArticles:
@@ -143,3 +148,22 @@ class TestGetStats:
         data = response.json()
         assert "articles" in data
         assert "sources" in data
+
+
+class TestNotes:
+    """Tests for article notes endpoints."""
+
+    def test_get_notes_not_found(self, client):
+        """Test getting notes for non-existent article."""
+        response = client.get("/api/signals/articles/99999/notes")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["notes"] == ""
+
+    def test_save_notes_invalid_id(self, client):
+        """Test saving notes with invalid ID."""
+        response = client.post(
+            "/api/signals/articles/invalid/notes",
+            json={"notes": "test"}
+        )
+        assert response.status_code == 400

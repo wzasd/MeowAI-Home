@@ -113,6 +113,30 @@ export function MessageBubble({
                 <MarkdownContent content={message.content} />
               </div>
             )}
+            {/* Attachments for user messages */}
+            {isUser && Array.isArray(message.metadata?.attachments) && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(message.metadata.attachments as Array<{ name: string; size: number; url: string; mimeType?: string }>).map((att, idx) => (
+                  <a
+                    key={idx}
+                    href={att.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 rounded-md bg-blue-400/30 px-2 py-1 text-xs text-white hover:bg-blue-400/50"
+                    title={att.mimeType || "file"}
+                  >
+                    <span className="max-w-[140px] truncate">{att.name}</span>
+                    <span className="opacity-80">
+                      {att.size < 1024
+                        ? `${att.size} B`
+                        : att.size < 1024 * 1024
+                        ? `${(att.size / 1024).toFixed(1)} KB`
+                        : `${(att.size / (1024 * 1024)).toFixed(1)} MB`}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
             {/* Rich content blocks */}
             {!isUser && richBlocks.length > 0 && (
               <div className="mt-2 border-t border-gray-100 pt-2 dark:border-gray-700">
@@ -174,6 +198,7 @@ export function MessageBubble({
             {!isUser && message.cat_id && (
               <TTSButton
                 content={message.content}
+                catId={message.cat_id}
                 catName={CAT_INFO[message.cat_id]?.name || message.cat_id}
               />
             )}

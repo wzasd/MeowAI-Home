@@ -59,6 +59,8 @@ class CapabilityBoardItem(BaseModel):
     connectionStatus: Optional[str] = None
     tools: Optional[List[Dict[str, Any]]] = None
     probeError: Optional[str] = None
+    auditStatus: Optional[str] = None
+    auditIssues: Optional[List[str]] = None
 
 
 class CapabilityBoardResponse(BaseModel):

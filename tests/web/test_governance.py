@@ -5,8 +5,10 @@ from pathlib import Path
 from urllib.parse import quote
 from httpx import AsyncClient, ASGITransport
 
+from src.auth.store import AuthStore
 from src.web.app import create_app
 from src.web.routes.governance import _with_db
+from tests.web.conftest import authenticate_client
 
 
 @pytest.fixture
@@ -21,8 +23,13 @@ async def app_client():
         original_db_path = gov_module.DEFAULT_DB_PATH
         gov_module.DEFAULT_DB_PATH = db_path
 
+        auth_store = AuthStore(db_path=db_path)
+        await auth_store.initialize()
+        app.state.auth_store = auth_store
+
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await authenticate_client(client)
             yield client
 
         gov_module.DEFAULT_DB_PATH = original_db_path

@@ -149,7 +149,7 @@ class ReviewWatcher:
         action = payload.get("action")
         pr_data = payload.get("pull_request", {})
 
-        if action not in ("opened", "synchronize", "closed", "reopened"):
+        if action not in ("opened", "synchronize", "closed", "reopened", "review_requested"):
             return None
 
         # Map action to event type
@@ -162,6 +162,8 @@ class ReviewWatcher:
                 event_type = PREventType.PR_MERGED
             else:
                 event_type = PREventType.PR_CLOSED
+        elif action == "review_requested":
+            event_type = PREventType.REVIEW_REQUESTED
         else:
             return None  # reopened not handled
 
