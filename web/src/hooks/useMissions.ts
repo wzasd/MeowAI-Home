@@ -1,34 +1,10 @@
 /** Missions hook — fetch and manage mission tasks. */
 
 import { useState, useEffect, useCallback } from "react";
+import { api } from "../api/client";
+import type { MissionTask, TaskStats, TaskStatus, Priority } from "../api/client";
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
-
-export type TaskStatus = "backlog" | "todo" | "doing" | "blocked" | "done";
-export type Priority = "P0" | "P1" | "P2" | "P3";
-
-export interface MissionTask {
-  id: string;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  priority: Priority;
-  ownerCat?: string;
-  tags: string[];
-  createdAt: string;
-  dueDate?: string;
-  progress?: number;
-}
-
-export interface TaskStats {
-  total: number;
-  backlog: number;
-  todo: number;
-  doing: number;
-  blocked: number;
-  done: number;
-  by_priority: Record<string, number>;
-}
+export type { TaskStatus, Priority, MissionTask, TaskStats } from "../api/client";
 
 interface UseMissionsReturn {
   tasks: MissionTask[];
@@ -57,16 +33,7 @@ export function useMissions(): UseMissionsReturn {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (filterPriority !== "all") {
-        params.set("priority", filterPriority);
-      }
-
-      const res = await fetch(`${API_BASE}/api/missions/tasks?${params}`);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch tasks: ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.missions.listTasks(filterPriority !== "all" ? filterPriority : undefined);
       setTasks(data.tasks ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch tasks");
@@ -78,15 +45,7 @@ export function useMissions(): UseMissionsReturn {
   // Create task
   const createTask = useCallback(async (task: Omit<MissionTask, "id" | "createdAt">): Promise<MissionTask | null> => {
     try {
-      const res = await fetch(`${API_BASE}/api/missions/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(task),
-      });
-      if (!res.ok) {
-        throw new Error(`Failed to create task: ${res.status}`);
-      }
-      const newTask = await res.json();
+      const newTask = await api.missions.createTask(task);
       setTasks((prev) => [...prev, newTask]);
       return newTask;
     } catch (err) {
@@ -98,15 +57,7 @@ export function useMissions(): UseMissionsReturn {
   // Update task
   const updateTask = useCallback(async (taskId: string, updates: Partial<Omit<MissionTask, "id">>): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/api/missions/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-      if (!res.ok) {
-        return false;
-      }
-      const updatedTask = await res.json();
+      const updatedTask = await api.missions.updateTask(taskId, updates);
       setTasks((prev) => prev.map((t) => (t.id === taskId ? updatedTask : t)));
       return true;
     } catch {
@@ -117,14 +68,7 @@ export function useMissions(): UseMissionsReturn {
   // Update task status
   const updateTaskStatus = useCallback(async (taskId: string, status: TaskStatus): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/api/missions/tasks/${taskId}/status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) {
-        return false;
-      }
+      await api.missions.updateTaskStatus(taskId, status);
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, status } : t))
       );
@@ -137,12 +81,7 @@ export function useMissions(): UseMissionsReturn {
   // Delete task
   const deleteTask = useCallback(async (taskId: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/api/missions/tasks/${taskId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        return false;
-      }
+      await api.missions.deleteTask(taskId);
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
       return true;
     } catch {
@@ -153,11 +92,7 @@ export function useMissions(): UseMissionsReturn {
   // Fetch stats
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/missions/stats`);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch stats: ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.missions.getStats();
       setStats(data);
     } catch (err) {
       // Silently fail for stats

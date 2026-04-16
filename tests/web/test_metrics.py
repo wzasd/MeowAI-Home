@@ -4,8 +4,10 @@ import tempfile
 from pathlib import Path
 from httpx import AsyncClient, ASGITransport
 
+from src.auth.store import AuthStore
 from src.web.app import create_app
 from src.metrics.sqlite_store import MetricsSQLiteStore
+from tests.web.conftest import authenticate_client
 
 
 @pytest.fixture
@@ -20,8 +22,13 @@ async def app_client():
         original_store = metrics_module.store
         metrics_module.store = MetricsSQLiteStore(db_path=db_path)
 
+        auth_store = AuthStore(db_path=db_path)
+        await auth_store.initialize()
+        app.state.auth_store = auth_store
+
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await authenticate_client(client)
             yield client
 
         metrics_module.store = original_store

@@ -1,5 +1,7 @@
 /** WebSocket manager for MeowAI Home streaming. */
 
+import type { Attachment } from "../types";
+
 type WSMessage = { type: string; [key: string]: unknown };
 type Handler = (data: WSMessage) => void;
 
@@ -62,10 +64,16 @@ export class WSManager {
     this.handlers.clear();
   }
 
-  send(content: string) {
+  send(content: string, attachments?: Attachment[]) {
     console.log("[WS] send() called, readyState=", this.ws?.readyState);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "send_message", content }));
+      this.ws.send(JSON.stringify({ type: "send_message", content, attachments }));
+    }
+  }
+
+  sendInteractiveAction(blockId: string, values: string[]) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "interactive_action", block_id: blockId, values }));
     }
   }
 

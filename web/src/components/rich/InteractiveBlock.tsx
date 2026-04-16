@@ -2,8 +2,25 @@ import { useState } from "react";
 import type { InteractiveBlock } from "../../types/rich";
 import { ChevronDown } from "lucide-react";
 
-export function InteractiveBlockView({ block }: { block: InteractiveBlock }) {
+interface InteractiveBlockViewProps {
+  block: InteractiveBlock;
+  onAction?: (blockId: string, values: string[]) => void;
+}
+
+export function InteractiveBlockView({ block, onAction }: InteractiveBlockViewProps) {
   const [selected, setSelected] = useState<string[]>([]);
+
+  const emitAction = (values: string[]) => {
+    if (onAction) {
+      onAction(block.blockId || block.prompt, values);
+    } else {
+      window.dispatchEvent(
+        new CustomEvent("meowai:interactive_action", {
+          detail: { blockId: block.blockId || block.prompt, values },
+        })
+      );
+    }
+  };
 
   if (block.style === "confirm") {
     return (
@@ -18,7 +35,7 @@ export function InteractiveBlockView({ block }: { block: InteractiveBlock }) {
                   ? "bg-green-600 text-white hover:bg-green-700"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-300"
               }`}
-              onClick={() => console.log("confirm:", opt.value)}
+              onClick={() => emitAction([opt.value])}
             >
               {opt.label}
             </button>
@@ -39,9 +56,13 @@ export function InteractiveBlockView({ block }: { block: InteractiveBlock }) {
                 ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-300"
                 : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             }`}
-            onClick={() => setSelected((prev) =>
-              prev.includes(opt.value) ? prev.filter((v) => v !== opt.value) : [...prev, opt.value]
-            )}
+            onClick={() => {
+              const next = selected.includes(opt.value)
+                ? selected.filter((v) => v !== opt.value)
+                : [...selected, opt.value];
+              setSelected(next);
+              emitAction(next);
+            }}
           >
             {opt.label}
           </button>
@@ -58,7 +79,11 @@ export function InteractiveBlockView({ block }: { block: InteractiveBlock }) {
         <select
           className="w-full appearance-none rounded border border-gray-300 bg-white px-3 py-1.5 pr-8 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           value={selected[0] || ""}
-          onChange={(e) => setSelected([e.target.value])}
+          onChange={(e) => {
+            const values = [e.target.value];
+            setSelected(values);
+            emitAction(values);
+          }}
         >
           <option value="" disabled>
             选择...

@@ -19,6 +19,7 @@ class Message:
     thinking: Optional[str] = None  # 思考过程（可选）
     is_internal: bool = False  # 是否是 A2A 内部对话
     parent_id: Optional[str] = None  # 关联的父消息ID（用于A2A链）
+    metadata: Optional[dict] = None  # 附加元数据（如附件、richBlocks）
 
     def to_dict(self) -> dict:
         result = {
@@ -33,6 +34,8 @@ class Message:
             result["is_internal"] = self.is_internal
         if self.parent_id:
             result["parent_id"] = self.parent_id
+        if self.metadata:
+            result["metadata"] = self.metadata
         return result
 
     @classmethod
@@ -55,7 +58,8 @@ class Message:
             timestamp=datetime.fromisoformat(data["timestamp"]),
             thinking=data.get("thinking"),
             is_internal=data.get("is_internal", False),
-            parent_id=data.get("parent_id")
+            parent_id=data.get("parent_id"),
+            metadata=data.get("metadata")
         )
 
 
@@ -85,11 +89,11 @@ class Thread:
             project_path=project_path or ""
         )
 
-    def add_message(self, role: RoleType, content: str, cat_id: Optional[str] = None) -> None:
+    def add_message(self, role: RoleType, content: str, cat_id: Optional[str] = None, metadata: Optional[dict] = None) -> None:
         """添加消息并更新更新时间"""
         if role not in VALID_ROLES:
             raise ValueError(f"Invalid role: {role}, must be one of {VALID_ROLES}")
-        self.messages.append(Message(role=role, content=content, cat_id=cat_id))
+        self.messages.append(Message(role=role, content=content, cat_id=cat_id, metadata=metadata))
         self.updated_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> dict:

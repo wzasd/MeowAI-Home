@@ -4,6 +4,7 @@ from src.collaboration.mcp_tools import (
     post_message_tool,
     search_files_tool,
     target_cats_tool,
+    read_uploaded_file_tool,
     TOOL_REGISTRY
 )
 from src.thread.models import Thread
@@ -66,11 +67,38 @@ async def test_target_cats_tool():
     assert result["targetCats"] == ["orange", "inky"]
 
 
+@pytest.mark.asyncio
+async def test_read_uploaded_file():
+    """测试 read_uploaded_file 工具正确读取已上传文件"""
+    import tempfile
+    from pathlib import Path
+    from src.thread import ThreadManager
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manager = ThreadManager(db_path=Path(tmpdir) / "test.db", skip_init=True)
+        await manager.async_init()
+        thread = await manager.create("Test Thread", project_path=tmpdir)
+
+        # Write a file to the upload directory
+        upload_dir = Path(tmpdir) / ".meowai" / "uploads" / thread.id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        (upload_dir / "test.txt").write_text("hello from upload", encoding="utf-8")
+
+        result = await read_uploaded_file_tool(thread.id, "test.txt")
+        assert "content" in result
+        assert "hello from upload" in result["content"]
+
+        # Test path traversal is blocked
+        result_bad = await read_uploaded_file_tool(thread.id, "../../etc/passwd")
+        assert "error" in result_bad
+
+
 def test_tool_registry():
     """测试工具注册表"""
     assert "post_message" in TOOL_REGISTRY
     assert "search_files" in TOOL_REGISTRY
     assert "targetCats" in TOOL_REGISTRY
+    assert "read_uploaded_file" in TOOL_REGISTRY
 
     # 验证结构
     for tool_name, config in TOOL_REGISTRY.items():

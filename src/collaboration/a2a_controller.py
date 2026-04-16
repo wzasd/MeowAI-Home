@@ -47,18 +47,20 @@ class CatResponse:
     content: str
     targetCats: Optional[List[str]] = None
     thinking: Optional[str] = None
+    is_final: bool = False
 
 
 class A2AController:
     """A2A 协作控制器"""
 
-    def __init__(self, agents: List[Dict[str, Any]], session_chain=None, dag_executor=None, template_factory=None, memory_service=None, metrics_collector=None):
+    def __init__(self, agents: List[Dict[str, Any]], session_chain=None, dag_executor=None, template_factory=None, memory_service=None, metrics_collector=None, broadcast_callback=None):
         self.agents = agents
         self.session_chain = session_chain
         self.dag_executor = dag_executor
         self.template_factory = template_factory
         self.memory_service = memory_service
         self.metrics_collector = metrics_collector or MetricsCollector()
+        self.broadcast_callback = broadcast_callback
         self.mcp_executor = MCPExecutor()
         self.skill_injector = SkillInjector()
         self.scope_guard = ScopeGuard(memory_service.episodic) if memory_service else None
@@ -118,12 +120,11 @@ class A2AController:
             return self._serial_execute(message, thread)
 
     async def _parallel_ideate(self, message: str, thread: Thread) -> AsyncIterator[CatResponse]:
-        tasks = [
+        streams = [
             self._call_cat(a["service"], a["name"], a["breed_id"], message, thread)
             for a in self.agents
         ]
-        for coro in asyncio.as_completed(tasks):
-            response = await coro
+        async for response in self._merge_streams(streams):
             yield response
 
     async def _serial_execute(self, message: str, thread: Thread) -> AsyncIterator[CatResponse]:
@@ -169,15 +170,21 @@ class A2AController:
             executed_cats.add(breed_id)
 
             context_msg = self._build_context(message, thread, len(executed_cats) - 1)
-            response = await self._call_cat(
+            final_response = None
+            async for response in self._call_cat(
                 agent_info["service"], agent_info["name"], breed_id, context_msg, thread
-            )
-            yield response
+            ):
+                yield response
+                if response.is_final:
+                    final_response = response
 
-            thread.add_message("assistant", response.content, cat_id=breed_id)
+            if not final_response:
+                continue
+
+            thread.add_message("assistant", final_response.content, cat_id=breed_id)
 
             # Parse @mentions from response and extend worklist
-            mentioned_cats = parse_a2a_mentions(response.content, available_cat_ids)
+            mentioned_cats = parse_a2a_mentions(final_response.content, available_cat_ids)
 
             # Fairness gate: don't extend worklist if user messages are waiting
             if self._user_queue_has_pending():
@@ -192,22 +199,24 @@ class A2AController:
                             break
 
             # Also handle explicit targetCats from response
-            if response.targetCats:
-                for target_cat in response.targetCats:
+            if final_response.targetCats:
+                for target_cat in final_response.targetCats:
                     for agent in self.agents:
                         if agent["breed_id"] == target_cat and target_cat not in executed_cats:
                             worklist.append(agent)
                             break
 
-    async def _call_cat(self, service, name: str, breed_id: str, message: str, thread: Thread) -> CatResponse:
+    async def _call_cat(self, service, name: str, breed_id: str, message: str, thread: Thread) -> AsyncIterator[CatResponse]:
         task_type = get_task_type(message, [])
         cat_capabilities = getattr(getattr(service, "config", None), "capabilities", []) or []
         if not cat_can_handle(cat_capabilities, task_type):
-            return CatResponse(
+            yield CatResponse(
                 cat_id=breed_id,
                 cat_name=name,
                 content=f"🚫 {name} 没有 `{task_type}` 相关能力，无法处理该任务。",
+                is_final=True,
             )
+            return
 
         invocation_id = f"{thread.id}:{breed_id}:{time.time()}"
         if self.metrics_collector:
@@ -266,8 +275,8 @@ class A2AController:
             session_id=session_id,
             cwd=thread.project_path,
         )
-        chunks = []
-        thinking_parts = []
+        chunks: List[str] = []
+        thinking_parts: List[str] = []
         new_session_id = None
         prompt_tokens = 0
         completion_tokens = 0
@@ -277,8 +286,20 @@ class A2AController:
             async for msg in service.invoke(message, options):
                 if msg.type == AgentMessageType.TEXT:
                     chunks.append(msg.content)
+                    yield CatResponse(
+                        cat_id=breed_id,
+                        cat_name=name,
+                        content=msg.content,
+                        is_final=False,
+                    )
                 elif msg.type == AgentMessageType.THINKING:
                     thinking_parts.append(msg.content)
+                    yield CatResponse(
+                        cat_id=breed_id,
+                        cat_name=name,
+                        thinking=msg.content,
+                        is_final=False,
+                    )
                 elif msg.type == AgentMessageType.DONE and msg.session_id:
                     new_session_id = msg.session_id
                 elif msg.type == AgentMessageType.USAGE and msg.usage:
@@ -310,18 +331,23 @@ class A2AController:
 
         if self.session_chain and new_session_id:
             self.session_chain.create(breed_id, thread.id, new_session_id)
+            if self.broadcast_callback:
+                try:
+                    await self.broadcast_callback({"type": "session_created"})
+                except Exception:
+                    pass
 
+        final_thinking = "".join(thinking_parts) if thinking_parts else None
         response = CatResponse(
             cat_id=breed_id, cat_name=name,
             content=parsed.clean_content,
             targetCats=parsed.targetCats if parsed.targetCats else None,
-            thinking="".join(thinking_parts) if thinking_parts else None,
+            thinking=final_thinking,
         )
 
         # Post-response processing: memory storage + entity extraction (async background)
         if self.memory_service:
             processor = get_processor()
-            # Fire and forget - don't block response
             processor.fire_and_forget(
                 self._async_store_episodes(thread.id, breed_id, message, response),
                 name=f"store_memories_{breed_id}"
@@ -331,7 +357,54 @@ class A2AController:
                 name=f"extract_entities_{breed_id}"
             )
 
-        return response
+        yield CatResponse(
+            cat_id=breed_id, cat_name=name,
+            content="",
+            targetCats=parsed.targetCats if parsed.targetCats else None,
+            thinking=final_thinking,
+            is_final=True,
+        )
+
+    @staticmethod
+    async def _merge_streams(streams: List[AsyncIterator[CatResponse]]) -> AsyncIterator[CatResponse]:
+        """Merge multiple CatResponse async iterators, yielding items as they arrive."""
+        if len(streams) == 1:
+            async for item in streams[0]:
+                yield item
+            return
+
+        queues = [asyncio.Queue() for _ in streams]
+
+        async def _pump(stream: AsyncIterator[CatResponse], queue: asyncio.Queue) -> None:
+            async for item in stream:
+                await queue.put(item)
+            await queue.put(None)  # sentinel
+
+        tasks = [asyncio.create_task(_pump(s, q)) for s, q in zip(streams, queues)]
+        active = [True] * len(queues)
+
+        try:
+            while any(active):
+                for i, q in enumerate(queues):
+                    if not active[i]:
+                        continue
+                    try:
+                        item = q.get_nowait()
+                        if item is None:
+                            active[i] = False
+                        else:
+                            yield item
+                    except asyncio.QueueEmpty:
+                        pass
+                if any(active):
+                    await asyncio.sleep(0)
+        finally:
+            for t in tasks:
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
 
     async def _async_build_memory_context(self, message: str, thread_id: str) -> str:
         """Async wrapper for memory context building."""

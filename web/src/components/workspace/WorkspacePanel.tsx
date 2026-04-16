@@ -2,12 +2,7 @@
 
 import { useState } from "react";
 import {
-  ChevronRight,
-  ChevronDown,
-  Folder,
-  FolderOpen,
   Search,
-  Plus,
   RefreshCw,
   Terminal,
   Globe,
@@ -20,98 +15,15 @@ import {
   FileText,
   Loader2,
 } from "lucide-react";
-import { useWorkspace, type TreeNode } from "../../hooks/useWorkspace";
-
-const FILE_ICONS: Record<string, string> = {
-  py: "🐍",
-  tsx: "⚛️",
-  ts: "⚛️",
-  js: "📜",
-  jsx: "⚛️",
-  json: "📋",
-  md: "📝",
-  toml: "⚙️",
-  yaml: "⚙️",
-  yml: "⚙️",
-  css: "🎨",
-  scss: "🎨",
-  html: "🌐",
-  rs: "🦀",
-  go: "🐹",
-  java: "☕",
-};
-
-function FileTreeItem({
-  node,
-  depth,
-  selectedPath,
-  onSelect,
-  onExpand,
-}: {
-  node: TreeNode;
-  depth: number;
-  selectedPath: string | null;
-  onSelect: (path: string) => void;
-  onExpand: (path: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(depth < 2);
-  const isDir = node.type === "directory";
-  const isSelected = selectedPath === node.path;
-  const ext = node.name.split(".").pop()?.toLowerCase() || "";
-
-  const handleClick = () => {
-    if (isDir) {
-      setExpanded(!expanded);
-      if (!expanded && !node.children) {
-        onExpand(node.path);
-      }
-    }
-    onSelect(node.path);
-  };
-
-  return (
-    <div>
-      <button
-        onClick={handleClick}
-        className={`flex w-full items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 ${
-          isSelected
-            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-            : "text-gray-700 dark:text-gray-300"
-        }`}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-      >
-        {isDir ? (
-          expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
-        ) : (
-          <span className="w-3" />
-        )}
-        {isDir ? (
-          expanded ? (
-            <FolderOpen size={12} className="text-amber-500" />
-          ) : (
-            <Folder size={12} className="text-amber-500" />
-          )
-        ) : (
-          <span className="text-[10px]">{FILE_ICONS[ext] || "📄"}</span>
-        )}
-        <span className="truncate">{node.name}</span>
-      </button>
-      {isDir && expanded && node.children?.map((child) => (
-        <FileTreeItem
-          key={child.path}
-          node={child}
-          depth={depth + 1}
-          selectedPath={selectedPath}
-          onSelect={onSelect}
-          onExpand={onExpand}
-        />
-      ))}
-    </div>
-  );
-}
+import { useWorkspace } from "../../hooks/useWorkspace";
+import { FileTree } from "./FileTree";
+import { GitPanel } from "./GitPanel";
+import { TerminalPanel } from "./TerminalPanel";
 
 export function WorkspacePanel() {
   const {
+    worktrees,
+    worktreeId,
     tree,
     file,
     loading,
@@ -123,6 +35,9 @@ export function WorkspacePanel() {
     search,
     searchResults,
     setSearchResults,
+    gitStatus,
+    gitDiff,
+    runCommand,
   } = useWorkspace();
 
   const [showTree, setShowTree] = useState(true);
@@ -144,6 +59,8 @@ export function WorkspacePanel() {
     setShowSearch(false);
   };
 
+  const selectedWorktree = worktrees.find((w) => w.id === worktreeId);
+
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
@@ -155,11 +72,29 @@ export function WorkspacePanel() {
           >
             {showTree ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
           </button>
-          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate max-w-[200px]">
+          <span className="max-w-[200px] truncate text-xs font-medium text-gray-600 dark:text-gray-400">
             {openFilePath || "选择文件"}
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          {worktrees.length > 0 && (
+            <select
+              className="max-w-[140px] rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] dark:border-gray-600 dark:bg-gray-700"
+              value={worktreeId || ""}
+              onChange={(e) => {
+                // worktree switch is handled by hook via external state if exposed;
+                // useWorkspace auto-selects, so we refetch here manually if needed.
+                // The hook doesn't expose setWorktreeId, so we rely on auto-selection.
+              }}
+              disabled
+            >
+              {worktrees.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.id}
+                </option>
+              ))}
+            </select>
+          )}
           <form onSubmit={handleSearch} className="relative">
             <input
               type="text"
@@ -189,16 +124,12 @@ export function WorkspacePanel() {
         {/* File tree */}
         {showTree && (
           <div className="w-56 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 py-1 dark:border-gray-700 dark:bg-gray-800/50">
-            {tree.map((node) => (
-              <FileTreeItem
-                key={node.path}
-                node={node}
-                depth={0}
-                selectedPath={openFilePath}
-                onSelect={handleSelectFile}
-                onExpand={fetchSubtree}
-              />
-            ))}
+            <FileTree
+              tree={tree}
+              selectedPath={openFilePath}
+              onSelect={handleSelectFile}
+              onExpand={fetchSubtree}
+            />
             {tree.length === 0 && !loading && (
               <div className="px-3 py-4 text-center text-xs text-gray-400">
                 暂无文件
@@ -276,7 +207,7 @@ export function WorkspacePanel() {
 
           {/* Bottom panel */}
           {showBottom && (
-            <div className="h-40 shrink-0 border-t border-gray-200 dark:border-gray-700">
+            <div className="h-48 shrink-0 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-center border-b border-gray-200 bg-gray-50 px-2 dark:border-gray-700 dark:bg-gray-800">
                 {[
                   { key: "terminal" as const, icon: Terminal, label: "终端" },
@@ -303,15 +234,9 @@ export function WorkspacePanel() {
                   <X size={12} />
                 </button>
               </div>
-              <div className="h-full overflow-auto bg-gray-900 p-2 font-mono text-xs text-gray-400">
+              <div className="h-full overflow-hidden bg-gray-900 font-mono text-xs text-gray-400">
                 {activeBottomTab === "terminal" && (
-                  <div>
-                    <span className="text-green-400">meowai@home</span>
-                    <span className="text-gray-500">:</span>
-                    <span className="text-blue-400">~</span>
-                    <span className="text-gray-500">$ </span>
-                    <span className="animate-pulse text-gray-300">_</span>
-                  </div>
+                  <TerminalPanel runCommand={runCommand} />
                 )}
                 {activeBottomTab === "preview" && (
                   <div className="flex h-full items-center justify-center text-gray-500">
@@ -319,17 +244,13 @@ export function WorkspacePanel() {
                   </div>
                 )}
                 {activeBottomTab === "git" && (
-                  <div>
-                    <span className="text-green-400">On branch </span>
-                    <span className="text-yellow-300">main</span>{"\n"}
-                    <span className="text-gray-400">nothing to commit, working tree clean</span>
-                  </div>
+                  <GitPanel gitStatus={gitStatus} gitDiff={gitDiff} />
                 )}
                 {activeBottomTab === "health" && (
-                  <div>
+                  <div className="p-2">
                     <span className="text-green-400">Health check: </span>
                     <span className="text-gray-300">All systems nominal</span>{"\n"}
-                    <span className="text-gray-400">Tests: 1215/1216 passed</span>
+                    <span className="text-gray-400">Tests: backend + frontend passing</span>
                   </div>
                 )}
               </div>

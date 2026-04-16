@@ -11,6 +11,8 @@ import { SignalInboxPage } from "./components/signals/SignalInboxPage";
 import { MissionHubPage } from "./components/mission/MissionHubPage";
 import { WorkspacePanel } from "./components/workspace/WorkspacePanel";
 import { useThemeStore } from "./stores/themeStore";
+import { useAuthStore } from "./stores/authStore";
+import { LoginModal } from "./components/auth/LoginModal";
 
 type Page = "chat" | "signals" | "mission" | "workspace";
 
@@ -28,6 +30,13 @@ export default function App() {
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>("chat");
   const { isDarkMode } = useThemeStore();
+  const token = useAuthStore((s) => s.token);
+  const isAuthLoading = useAuthStore((s) => s.isLoading);
+  const initAuth = useAuthStore((s) => s.init);
+
+  useEffect(() => {
+    initAuth();
+  }, [initAuth]);
 
   // Close mobile menu on escape
   useEffect(() => {
@@ -37,6 +46,22 @@ export default function App() {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
+
+  if (isAuthLoading) {
+    return (
+      <div className={`flex h-screen items-center justify-center bg-gray-50 transition-colors dark:bg-gray-900 ${isDarkMode ? "dark" : ""}`}>
+        <div className="text-gray-500 dark:text-gray-400">初始化中...</div>
+      </div>
+    );
+  }
+
+  if (!token) {
+    return (
+      <div className={`flex h-screen overflow-hidden bg-gray-50 transition-colors dark:bg-gray-900 ${isDarkMode ? "dark" : ""}`}>
+        <LoginModal />
+      </div>
+    );
+  }
 
   return (
     <div className={`flex h-screen overflow-hidden bg-gray-50 transition-colors dark:bg-gray-900 ${isDarkMode ? "dark" : ""}`}>

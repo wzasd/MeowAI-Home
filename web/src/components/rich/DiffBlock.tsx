@@ -18,19 +18,23 @@ export function DiffBlockView({ block }: { block: DiffBlock }) {
             )}
             <pre className="whitespace-pre">
               {hunk.content.split("\n").map((line, li) => (
-                <div
-                  key={li}
-                  className={
-                    line.startsWith("+")
-                      ? "bg-green-900/30 text-green-300"
-                      : line.startsWith("-")
-                        ? "bg-red-900/30 text-red-300"
-                        : line.startsWith("@@")
-                          ? "text-blue-400"
-                          : "text-gray-300"
-                  }
-                >
-                  {line}
+                <div key={li} className="flex">
+                  <span className="w-8 shrink-0 select-none text-right text-gray-500">
+                    {li + 1}
+                  </span>
+                  <span
+                    className={`flex-1 pl-2 ${
+                      line.startsWith("+")
+                        ? "bg-green-900/30 text-green-300"
+                        : line.startsWith("-")
+                          ? "bg-red-900/30 text-red-300"
+                          : line.startsWith("@@")
+                            ? "text-blue-400"
+                            : "text-gray-300"
+                    }`}
+                  >
+                    {line}
+                  </span>
                 </div>
               ))}
             </pre>

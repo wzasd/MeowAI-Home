@@ -68,7 +68,33 @@ class ArticleStore:
                 ON articles(fetched_at)
             """)
 
+            # Migrate: add notes column if missing
+            try:
+                conn.execute("ALTER TABLE articles ADD COLUMN notes TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
             conn.commit()
+
+    def get_notes(self, article_id: int) -> str:
+        """Get study notes for an article."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT notes FROM articles WHERE id = ?",
+                (article_id,)
+            )
+            row = cursor.fetchone()
+            return row[0] or "" if row else ""
+
+    def save_notes(self, article_id: int, notes: str) -> bool:
+        """Save study notes for an article."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "UPDATE articles SET notes = ? WHERE id = ?",
+                (notes, article_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
     def store(self, article: FetchedArticle, tier: SourceTier = SourceTier.P2) -> bool:
         """Store an article, returns True if new, False if duplicate."""

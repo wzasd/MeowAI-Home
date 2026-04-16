@@ -5,10 +5,12 @@ import tempfile
 from pathlib import Path
 from httpx import AsyncClient, ASGITransport
 
+from src.auth.store import AuthStore
 from src.thread.thread_manager import ThreadManager
 from src.web.app import create_app
 from src.workspace import WorktreeManager
 from src.web.routes.workspace import reset_worktree_manager
+from tests.web.conftest import authenticate_client
 
 
 @pytest.fixture
@@ -42,8 +44,13 @@ async def app_client():
         app.state.cat_registry = cat_reg
         app.state.agent_registry = agent_reg
 
+        auth_store = AuthStore(db_path=db_path)
+        await auth_store.initialize()
+        app.state.auth_store = auth_store
+
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await authenticate_client(client)
             yield client, tmpdir
 
         ThreadManager.reset()
@@ -271,4 +278,106 @@ async def test_reveal_path_traversal(app_client):
         "worktreeId": "test-reveal",
         "path": "../../../etc/passwd"
     })
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_terminal_command_success(app_client):
+    """Test executing a shell command in worktree."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-terminal"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+    (worktree_path / "test.txt").write_text("hello")
+
+    response = await client.post("/api/workspace/terminal", json={
+        "worktreeId": "test-terminal",
+        "command": "cat test.txt"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["stdout"] == "hello"
+    assert data["returncode"] == 0
+
+
+@pytest.mark.asyncio
+async def test_terminal_command_blocked(app_client):
+    """Test blocked dangerous commands."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-term-block"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    response = await client.post("/api/workspace/terminal", json={
+        "worktreeId": "test-term-block",
+        "command": "rm -rf /"
+    })
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_terminal_command_not_found(app_client):
+    """Test terminal for non-existent worktree."""
+    client, tmpdir = app_client
+
+    response = await client.post("/api/workspace/terminal", json={
+        "worktreeId": "nonexistent",
+        "command": "echo hi"
+    })
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_git_status_success(app_client):
+    """Test git status in a worktree."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-git"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    response = await client.get("/api/workspace/git-status?worktreeId=test-git")
+    assert response.status_code == 200
+    data = response.json()
+    assert "branch" in data
+    assert "clean" in data
+    assert "files" in data
+
+
+@pytest.mark.asyncio
+async def test_git_status_not_found(app_client):
+    """Test git status for non-existent worktree."""
+    client, tmpdir = app_client
+
+    response = await client.get("/api/workspace/git-status?worktreeId=nonexistent")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_git_diff_success(app_client):
+    """Test git diff in a worktree."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-git-diff"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    response = await client.get("/api/workspace/git-diff?worktreeId=test-git-diff")
+    assert response.status_code == 200
+    data = response.json()
+    assert "diff" in data
+
+
+@pytest.mark.asyncio
+async def test_git_diff_path_traversal(app_client):
+    """Test git diff path traversal protection."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-git-diff-trav"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    response = await client.get("/api/workspace/git-diff?worktreeId=test-git-diff-trav&path=../../../etc/passwd")
     assert response.status_code == 403

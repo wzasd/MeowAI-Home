@@ -30,6 +30,17 @@ export interface SignalSource {
   enabled: boolean;
 }
 
+export interface ResearchReport {
+  title: string;
+  sections: Array<{
+    cat_id: string;
+    cat_name: string;
+    role: string;
+    content: string;
+  }>;
+  summary: string;
+}
+
 interface UseSignalsReturn {
   articles: SignalArticle[];
   sources: SignalSource[];
@@ -47,6 +58,10 @@ interface UseSignalsReturn {
   updateArticleStatus: (articleId: string, status: ArticleStatus) => Promise<boolean>;
   starArticle: (articleId: string) => Promise<boolean>;
   refreshSource: (sourceId: string) => Promise<boolean>;
+  getNotes: (articleId: string) => Promise<string>;
+  saveNotes: (articleId: string, notes: string) => Promise<boolean>;
+  generatePodcast: (articleId: string) => Promise<Blob>;
+  generateResearch: (articleId: string) => Promise<ResearchReport>;
 }
 
 export function useSignals(): UseSignalsReturn {
@@ -177,6 +192,56 @@ export function useSignals(): UseSignalsReturn {
     }
   }, []);
 
+  // Get notes
+  const getNotes = useCallback(async (articleId: string): Promise<string> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/signals/articles/${articleId}/notes`);
+      if (!res.ok) return "";
+      const data = await res.json();
+      return data.notes || "";
+    } catch {
+      return "";
+    }
+  }, []);
+
+  // Save notes
+  const saveNotes = useCallback(async (articleId: string, notes: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/signals/articles/${articleId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Generate podcast
+  const generatePodcast = useCallback(async (articleId: string): Promise<Blob> => {
+    const res = await fetch(`${API_BASE}/api/signals/articles/${articleId}/podcast`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return res.blob();
+  }, []);
+
+  // Generate research report
+  const generateResearch = useCallback(async (articleId: string): Promise<ResearchReport> => {
+    const res = await fetch(`${API_BASE}/api/signals/articles/${articleId}/research`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }, []);
+
   // Initial fetch
   useEffect(() => {
     fetchArticles();
@@ -200,5 +265,9 @@ export function useSignals(): UseSignalsReturn {
     updateArticleStatus,
     starArticle,
     refreshSource,
+    getNotes,
+    saveNotes,
+    generatePodcast,
+    generateResearch,
   };
 }

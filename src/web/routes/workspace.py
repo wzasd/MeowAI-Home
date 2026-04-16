@@ -1,8 +1,10 @@
 """Workspace API routes for file system access."""
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import os
+import shlex
+import subprocess
 from pathlib import Path
 
 router = APIRouter(prefix="/workspace", tags=["workspace"])
@@ -26,6 +28,17 @@ def reset_worktree_manager():
     """Reset the global worktree manager (for testing)."""
     global _worktree_manager
     _worktree_manager = None
+
+
+ALLOWED_COMMANDS = {
+    "git", "python", "python3", "pytest", "pnpm", "npm", "node",
+    "ls", "cat", "echo", "pwd", "find", "grep", "head", "tail",
+    "mkdir", "touch", "cp", "mv", "rm", "rmdir", "code", "open",
+    "which", "tsc", "vite", "biome", "npx", "curl", "wget", "tree",
+    "uname", "whoami", "date", "env", "ssh", "docker",
+}
+
+SHELL_METACHARACTERS = {";", "|", "&", "`", "$", "(", ")", "<", ">"}
 
 
 class WorktreeListResponse(BaseModel):
@@ -63,6 +76,35 @@ class SearchResult(BaseModel):
 
 class SearchResponse(BaseModel):
     results: list[SearchResult]
+
+
+class TerminalRequest(BaseModel):
+    worktreeId: str = Field(..., description="Worktree ID")
+    command: str = Field(..., description="Shell command to execute")
+
+
+class TerminalResponse(BaseModel):
+    stdout: str
+    stderr: str
+    returncode: int
+
+
+class GitStatusItem(BaseModel):
+    status: str
+    path: str
+    original_path: Optional[str] = None
+
+
+class GitStatusResponse(BaseModel):
+    branch: str
+    ahead: int = 0
+    behind: int = 0
+    clean: bool
+    files: list[GitStatusItem]
+
+
+class GitDiffResponse(BaseModel):
+    diff: str
 
 
 @router.get("/worktrees", response_model=WorktreeListResponse)
@@ -253,6 +295,158 @@ async def search_workspace(request: dict):
     return {"results": results[:100]}
 
 
+@router.post("/terminal", response_model=TerminalResponse)
+async def run_terminal_command(request: TerminalRequest):
+    """Execute a safe command in the worktree directory."""
+    manager = get_worktree_manager()
+    entry = manager.get(request.worktreeId)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Worktree not found")
+
+    root = Path(entry.root).resolve()
+    command = request.command.strip()
+    if not command:
+        raise HTTPException(status_code=400, detail="Empty command")
+
+    # Reject any shell metacharacters to prevent injection
+    for ch in SHELL_METACHARACTERS:
+        if ch in command:
+            raise HTTPException(status_code=400, detail=f"Shell metacharacter '{ch}' is not allowed")
+
+    try:
+        parts = shlex.split(command)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid command syntax: {e}")
+
+    if not parts:
+        raise HTTPException(status_code=400, detail="Empty command")
+
+    base_cmd = parts[0]
+    if base_cmd not in ALLOWED_COMMANDS:
+        raise HTTPException(status_code=400, detail=f"Command '{base_cmd}' is not allowed")
+
+    # Additional safety: block dangerous rm patterns
+    if base_cmd == "rm" and "-rf" in parts:
+        for p in parts:
+            if p == "/" or p.startswith("~/") or p == "~":
+                raise HTTPException(status_code=400, detail="Dangerous rm operation blocked")
+
+    try:
+        result = subprocess.run(
+            parts,
+            shell=False,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        stdout = result.stdout
+        stderr = result.stderr
+        # Truncate large outputs
+        if len(stdout) > 100_000:
+            stdout = stdout[:100_000] + "\n[stdout truncated]"
+        if len(stderr) > 100_000:
+            stderr = stderr[:100_000] + "\n[stderr truncated]"
+        return TerminalResponse(stdout=stdout, stderr=stderr, returncode=result.returncode)
+    except subprocess.TimeoutExpired:
+        return TerminalResponse(stdout="", stderr="Command timed out after 30s", returncode=-1)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Command execution failed: {e}")
+
+
+@router.get("/git-status", response_model=GitStatusResponse)
+async def git_status(
+    worktreeId: str = Query(..., description="Worktree ID"),
+):
+    """Get git status for a worktree."""
+    manager = get_worktree_manager()
+    entry = manager.get(worktreeId)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Worktree not found")
+
+    root = Path(entry.root).resolve()
+
+    def run_git(args: list[str]) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return result.stdout.strip()
+
+    branch = run_git(["branch", "--show-current"]) or "HEAD"
+    ahead_behind = run_git(["rev-list", "--left-right", "--count", f"origin/{branch}...{branch}"])
+    ahead = 0
+    behind = 0
+    if ahead_behind and "\t" in ahead_behind:
+        parts = ahead_behind.split("\t")
+        try:
+            ahead = int(parts[1])
+            behind = int(parts[0])
+        except ValueError:
+            pass
+
+    porcelain = run_git(["status", "--porcelain"])
+    files: list[GitStatusItem] = []
+    for line in porcelain.splitlines():
+        if len(line) < 3:
+            continue
+        status = line[:2]
+        rest = line[3:]
+        if " -> " in rest:
+            original, current = rest.split(" -> ", 1)
+            files.append(GitStatusItem(status=status, path=current, original_path=original))
+        else:
+            files.append(GitStatusItem(status=status, path=rest))
+
+    return GitStatusResponse(
+        branch=branch,
+        ahead=ahead,
+        behind=behind,
+        clean=len(files) == 0,
+        files=files,
+    )
+
+
+@router.get("/git-diff")
+async def git_diff(
+    worktreeId: str = Query(..., description="Worktree ID"),
+    path: str = Query("", description="Optional file path"),
+):
+    """Get git diff for a worktree or specific file."""
+    manager = get_worktree_manager()
+    entry = manager.get(worktreeId)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Worktree not found")
+
+    root = Path(entry.root).resolve()
+    if path:
+        file_path = (root / path).resolve()
+        if not str(file_path).startswith(str(root)):
+            raise HTTPException(status_code=403, detail="Path traversal detected")
+
+    args = ["diff"]
+    if path:
+        args.append(path)
+
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        diff = result.stdout
+        if len(diff) > 500_000:
+            diff = diff[:500_000] + "\n[diff truncated]"
+        return GitDiffResponse(diff=diff)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Git diff failed: {e}")
+
+
 @router.post("/reveal")
 async def reveal_in_finder(request: dict):
     """Reveal file in system file manager."""
@@ -271,7 +465,6 @@ async def reveal_in_finder(request: dict):
         raise HTTPException(status_code=403, detail="Path traversal detected")
 
     import platform
-    import subprocess
 
     system = platform.system()
     try:

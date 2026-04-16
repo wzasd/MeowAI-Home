@@ -1,17 +1,20 @@
 import { useState } from "react";
-import { X, Settings, Link, Variable, Palette, Cat, Shield, BarChart3, Zap, Trophy, Scale, Key } from "lucide-react";
+import { X, Settings, Link, Variable, Palette, Cat, Shield, BarChart3, Zap, Trophy, Scale, Key, CalendarClock, GitPullRequest, Cpu } from "lucide-react";
 import { ConnectorSettings } from "./ConnectorSettings";
 import { EnvVarSettings } from "./EnvVarSettings";
 import { CatSettings } from "./CatSettings";
 import { AccountSettings } from "./AccountSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
-import { CapabilitySettings } from "./CapabilitySettings";
+import { CapabilityBoard } from "./CapabilityBoard";
 import { QuotaBoard } from "./QuotaBoard";
 import { LeaderboardTab } from "./LeaderboardTab";
 import { PermissionsSettings } from "./PermissionsSettings";
 import { GovernanceSettings } from "./GovernanceSettings";
+import { TaskScheduler } from "./TaskScheduler";
+import { ReviewPanel } from "./ReviewPanel";
+import { LimbPanel } from "./LimbPanel";
 
-type SettingsTab = "accounts" | "connectors" | "env" | "cats" | "appearance" | "capabilities" | "quota" | "leaderboard" | "permissions" | "governance";
+type SettingsTab = "accounts" | "connectors" | "env" | "cats" | "appearance" | "capabilities" | "quota" | "leaderboard" | "permissions" | "governance" | "scheduler" | "review" | "limbs";
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -28,6 +31,9 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     { id: "accounts" as const, label: "AI Providers", icon: Key },
     { id: "capabilities" as const, label: "能力配置", icon: Zap },
     { id: "permissions" as const, label: "权限", icon: Shield },
+    { id: "scheduler" as const, label: "任务调度", icon: CalendarClock },
+    { id: "review" as const, label: "PR 审阅", icon: GitPullRequest },
+    { id: "limbs" as const, label: "Limb 设备", icon: Cpu },
     { id: "governance" as const, label: "治理", icon: Scale },
     { id: "quota" as const, label: "配额看板", icon: BarChart3 },
     { id: "leaderboard" as const, label: "排行榜", icon: Trophy },
@@ -81,14 +87,17 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           <div className="flex-1 overflow-y-auto p-6">
             {activeTab === "cats" && <CatSettings />}
             {activeTab === "accounts" && <AccountSettings />}
-            {activeTab === "capabilities" && <CapabilitySettings />}
+            {activeTab === "capabilities" && <CapabilityBoard />}
             {activeTab === "permissions" && <PermissionsSettings />}
+            {activeTab === "scheduler" && <TaskScheduler />}
+            {activeTab === "review" && <ReviewPanel />}
             {activeTab === "governance" && <GovernanceSettings />}
             {activeTab === "quota" && <QuotaBoard />}
             {activeTab === "leaderboard" && <LeaderboardTab />}
             {activeTab === "connectors" && <ConnectorSettings />}
             {activeTab === "env" && <EnvVarSettings />}
             {activeTab === "appearance" && <AppearanceSettings />}
+            {activeTab === "limbs" && <LimbPanel />}
           </div>
         </div>
       </div>

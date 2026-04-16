@@ -1,10 +1,10 @@
 /** React hook for WebSocket connection to a thread. */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { WSManager } from "../api/websocket";
 import { useThreadStore } from "../stores/threadStore";
 import { useChatStore } from "../stores/chatStore";
-import type { MessageResponse } from "../types";
+import type { MessageResponse, Attachment } from "../types";
 
 export function useWebSocket() {
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
@@ -86,18 +86,29 @@ export function useWebSocket() {
   // Stable send handler — always uses wsRef
   useEffect(() => {
     const handleSend = (e: Event) => {
-      const { content } = (e as CustomEvent).detail;
+      const { content, attachments } = (e as CustomEvent<{ content: string; attachments?: Attachment[] }>).detail;
       if (!content) return;
       const ws = wsRef.current;
       if (ws && ws.isConnected) {
         console.log("[WS] Sending:", content.substring(0, 60));
-        ws.send(content);
+        ws.send(content, attachments);
       } else {
         console.error("[WS] Cannot send - ws=", !!ws, "connected=", ws?.isConnected);
       }
     };
+    const handleInteractiveAction = (e: Event) => {
+      const { blockId, values } = (e as CustomEvent<{ blockId: string; values: string[] }>).detail;
+      const ws = wsRef.current;
+      if (ws && ws.isConnected) {
+        ws.sendInteractiveAction(blockId, values);
+      }
+    };
     window.addEventListener("meowai:send", handleSend);
-    return () => window.removeEventListener("meowai:send", handleSend);
+    window.addEventListener("meowai:interactive_action", handleInteractiveAction);
+    return () => {
+      window.removeEventListener("meowai:send", handleSend);
+      window.removeEventListener("meowai:interactive_action", handleInteractiveAction);
+    };
   }, []);
 
   return wsRef;

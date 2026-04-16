@@ -3,11 +3,14 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.signals.store import ArticleStore
 from src.signals.sources import SignalSource, SourceConfig, SourceTier, FetchMethod
+from src.signals.podcast import podcast_generator
+from src.signals.research import ResearchGenerator
+from src.web.dependencies import get_cat_registry, get_agent_registry
 
 router = APIRouter(prefix="/signals", tags=["signals"])
 
@@ -138,6 +141,17 @@ class SearchResponse(BaseModel):
     """Search results response."""
     articles: List[SignalArticle]
     query: str
+
+
+class NotesRequest(BaseModel):
+    """Save notes request."""
+    notes: str = Field(..., description="Study notes for the article")
+
+
+class NotesResponse(BaseModel):
+    """Notes response."""
+    article_id: str
+    notes: str
 
 
 # === Helper Functions ===
@@ -312,6 +326,99 @@ async def star_article(article_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Article not found")
 
     return {"success": True, "id": article_id, "starred": True}
+
+
+@router.get("/articles/{article_id}/notes", response_model=NotesResponse)
+async def get_article_notes(article_id: str) -> Dict[str, Any]:
+    """Get study notes for an article."""
+    store = get_article_store()
+
+    try:
+        article_id_int = int(article_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid article ID")
+
+    notes = store.get_notes(article_id_int)
+    return {"article_id": article_id, "notes": notes}
+
+
+@router.post("/articles/{article_id}/notes", response_model=NotesResponse)
+async def save_article_notes(article_id: str, request: NotesRequest) -> Dict[str, Any]:
+    """Save study notes for an article."""
+    store = get_article_store()
+
+    try:
+        article_id_int = int(article_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid article ID")
+
+    success = store.save_notes(article_id_int, request.notes)
+    if not success:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    return {"article_id": article_id, "notes": request.notes}
+
+
+@router.post("/articles/{article_id}/podcast")
+async def generate_podcast(article_id: str):
+    """Generate a podcast audio file for an article."""
+    store = get_article_store()
+
+    try:
+        article_id_int = int(article_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid article ID")
+
+    article = store.get_by_id(article_id_int)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    from fastapi.responses import FileResponse
+
+    try:
+        file_path = await podcast_generator.generate(
+            article_id=article_id,
+            title=article.get("title", "Untitled"),
+            content=article.get("summary") or article.get("content", ""),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Podcast generation failed: {e}")
+
+    return FileResponse(
+        path=file_path,
+        media_type="audio/mpeg",
+        filename=f"podcast_{article_id}.mp3",
+    )
+
+
+@router.post("/articles/{article_id}/research")
+async def generate_research(
+    article_id: str,
+    cat_registry=Depends(get_cat_registry),
+    agent_registry=Depends(get_agent_registry),
+):
+    """Generate a collaborative research report for an article."""
+    store = get_article_store()
+
+    try:
+        article_id_int = int(article_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid article ID")
+
+    article = store.get_by_id(article_id_int)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    generator = ResearchGenerator(cat_registry, agent_registry)
+    try:
+        result = await generator.generate(
+            title=article.get("title", "Untitled"),
+            content=article.get("summary") or article.get("content", ""),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Research generation failed: {e}")
+
+    return result
 
 
 @router.get("/sources", response_model=SourcesResponse)

@@ -4,6 +4,7 @@ import { DiffBlockView } from "./DiffBlock";
 import { ChecklistBlockView } from "./ChecklistBlock";
 import { MediaBlockView } from "./MediaBlock";
 import { InteractiveBlockView } from "./InteractiveBlock";
+import { AudioBlockView } from "./AudioBlock";
 
 export function RichBlocks({ blocks }: { blocks: RichBlock[] }) {
   if (!blocks || blocks.length === 0) return null;
@@ -22,6 +23,8 @@ export function RichBlocks({ blocks }: { blocks: RichBlock[] }) {
             return <MediaBlockView key={i} block={block} />;
           case "interactive":
             return <InteractiveBlockView key={i} block={block} />;
+          case "audio":
+            return <AudioBlockView key={i} block={block} />;
           default:
             return null;
         }

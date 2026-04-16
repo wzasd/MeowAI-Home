@@ -2,7 +2,6 @@ import os
 import tempfile
 from typing import AsyncIterator, Optional
 from ..base import AgentService
-from src.utils.ndjson import parse_ndjson_stream_iter
 from src.utils.process import run_cli_command, run_cli_command_stream
 
 

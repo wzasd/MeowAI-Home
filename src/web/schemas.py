@@ -21,6 +21,7 @@ class ThreadRename(BaseModel):
 class MessageSend(BaseModel):
     content: str = Field(min_length=1, max_length=10000)
     cat_id: Optional[str] = None
+    attachments: Optional[list[dict]] = None
 
 
 # --- Response schemas ---
@@ -30,6 +31,7 @@ class MessageResponse(BaseModel):
     content: str
     cat_id: Optional[str] = None
     timestamp: datetime
+    metadata: Optional[dict] = None
 
 
 class ThreadResponse(BaseModel):
