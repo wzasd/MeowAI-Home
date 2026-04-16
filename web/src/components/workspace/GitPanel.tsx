@@ -17,27 +17,26 @@ function statusIcon(status: string) {
   return <GitCommit size={12} className="text-gray-400" />;
 }
 
-function statusLabel(status: string): string {
-  const map: Record<string, string> = {
-    M: "已修改",
-    A: "已新增",
-    D: "已删除",
-    R: "重命名",
-    C: "已复制",
-    U: "已更新",
-    "?": "未跟踪",
-    "!": "已忽略",
-  };
-  const labels = status.split("").map((c) => map[c] || c).filter(Boolean);
-  return labels.join(" / ") || status;
-}
-
 export function GitPanel({ gitStatus, gitDiff }: GitPanelProps) {
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [diff, setDiff] = useState<string>("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [diffLoading, setDiffLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+
+  // Load git status on mount — use separate flag to avoid effect-setState lint
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const s = await gitStatus();
+      if (!cancelled) {
+        setStatus(s);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -55,10 +54,6 @@ export function GitPanel({ gitStatus, gitDiff }: GitPanelProps) {
     },
     [gitDiff]
   );
-
-  useEffect(() => {
-    loadStatus();
-  }, [loadStatus]);
 
   const handleFileClick = (path: string) => {
     setSelectedFile(path);
@@ -81,10 +76,10 @@ export function GitPanel({ gitStatus, gitDiff }: GitPanelProps) {
               干净
             </span>
           )}
-          {(status?.ahead || 0) > 0 && (
+          {status && status.ahead > 0 && (
             <span className="text-[10px] text-gray-400">↑{status.ahead}</span>
           )}
-          {(status?.behind || 0) > 0 && (
+          {status && status.behind > 0 && (
             <span className="text-[10px] text-gray-400">↓{status.behind}</span>
           )}
         </div>

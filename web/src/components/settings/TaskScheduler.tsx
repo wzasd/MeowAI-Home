@@ -7,7 +7,6 @@ import {
   Trash2,
   Plus,
   Clock,
-  Calendar,
   Loader2,
   ChevronDown,
   ChevronUp,
@@ -157,7 +156,7 @@ function CreateTaskModal({
   isOpen: boolean;
   onClose: () => void;
   templates: SchedulerTemplate[];
-  onCreate: (task: any) => void;
+  onCreate: (task: Omit<ScheduledTask, "id" | "created_at" | "updated_at" | "status" | "run_count" | "error_count">) => void;
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -322,7 +321,7 @@ export function TaskScheduler() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [logsMap, setLogsMap] = useState<Record<string, any[]>>({});
+  const [logsMap, setLogsMap] = useState<Record<string, { task_id: string; success: boolean; timestamp: number; error?: string }[]>>({});
   const [logsLoadingMap, setLogsLoadingMap] = useState<Record<string, boolean>>({});
 
   const enabledCount = useMemo(() => tasks.filter((t) => t.enabled).length, [tasks]);
@@ -339,7 +338,7 @@ export function TaskScheduler() {
     setLogsLoadingMap((prev) => ({ ...prev, [taskId]: false }));
   };
 
-  const handleCreate = async (taskData: any) => {
+  const handleCreate = async (taskData: Omit<ScheduledTask, "id" | "created_at" | "updated_at" | "status" | "run_count" | "error_count">) => {
     await createTask(taskData);
   };
 

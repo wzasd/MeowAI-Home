@@ -12,7 +12,6 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
-  Plus,
   X,
 } from "lucide-react";
 import { useReview, type ReviewTracking, type PRCIState } from "../../hooks/useReview";
@@ -153,7 +152,8 @@ function CIPRRow({ pr }: { pr: PRCIState }) {
 function AssignModal({
   isOpen,
   onClose,
-  repo,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  repo: _repo,
   pr,
   onAssign,
 }: {
