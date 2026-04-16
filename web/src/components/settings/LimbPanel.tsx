@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Trash2, Power, PowerOff, Play, FileText, RefreshCw, Cpu } from "lucide-react";
-import { useLimbs, type LimbDevice, type DeviceCapability, type DeviceStatus } from "../../hooks/useLimbs";
+import { useLimbs, type DeviceCapability, type DeviceStatus } from "../../hooks/useLimbs";
 
 const CAPABILITY_LABELS: Record<DeviceCapability, string> = {
   actuator: "执行器",

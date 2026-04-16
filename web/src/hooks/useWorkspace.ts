@@ -51,13 +51,15 @@ export function useWorkspace() {
   const fetchWorktrees = useCallback(async () => {
     try {
       const data = await api.workspace.listWorktrees();
-      setWorktrees(data.worktrees ?? []);
+      if (!data) return;
+      const list = data.worktrees ?? [];
+      setWorktrees(list);
       // Auto-select current thread's worktree or first available
-      const current = data.worktrees.find((w: WorktreeEntry) => w.id === currentThreadId);
+      const current = list.find((w: WorktreeEntry) => w.id === currentThreadId);
       if (current) {
         setWorktreeId(current.id);
-      } else if (data.worktrees.length > 0 && !worktreeId) {
-        setWorktreeId(data.worktrees[0].id);
+      } else if (list.length > 0 && !worktreeId) {
+        setWorktreeId(list[0]!.id);
       }
     } catch {
       /* ignore */

@@ -139,7 +139,15 @@ export function useLimbs(): UseLimbsReturn {
     }
   }, []);
 
-  const registerDevice = useCallback(async (data) => {
+  const registerDevice = useCallback(async (data: {
+    name: string;
+    device_type: string;
+    endpoint: string;
+    capabilities?: DeviceCapability[];
+    auth_token?: string;
+    owner_user_id?: string;
+    metadata?: Record<string, unknown>;
+  }) => {
     try {
       const res = await fetch(`${API_BASE}/api/limbs`, {
         method: "POST",
@@ -156,7 +164,13 @@ export function useLimbs(): UseLimbsReturn {
     }
   }, []);
 
-  const updateDevice = useCallback(async (deviceId: string, data) => {
+  const updateDevice = useCallback(async (deviceId: string, data: {
+    name?: string;
+    endpoint?: string;
+    status?: DeviceStatus;
+    auth_token?: string;
+    metadata?: Record<string, unknown>;
+  }) => {
     try {
       const res = await fetch(`${API_BASE}/api/limbs/${deviceId}`, {
         method: "PATCH",

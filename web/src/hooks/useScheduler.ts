@@ -93,7 +93,7 @@ export function useScheduler(): UseSchedulerReturn {
     }
   }, []);
 
-  const createTask = useCallback(async (task) => {
+  const createTask = useCallback(async (task: Omit<ScheduledTask, "id" | "created_at" | "updated_at" | "status" | "run_count" | "error_count">) => {
     try {
       const res = await fetch(`${API_BASE}/api/scheduler/tasks`, {
         method: "POST",
@@ -110,7 +110,7 @@ export function useScheduler(): UseSchedulerReturn {
     }
   }, []);
 
-  const updateTask = useCallback(async (taskId, updates) => {
+  const updateTask = useCallback(async (taskId: string, updates: Partial<Omit<ScheduledTask, "id">>) => {
     try {
       const res = await fetch(`${API_BASE}/api/scheduler/tasks/${taskId}`, {
         method: "PATCH",
@@ -127,7 +127,7 @@ export function useScheduler(): UseSchedulerReturn {
     }
   }, []);
 
-  const enableTask = useCallback(async (taskId) => {
+  const enableTask = useCallback(async (taskId: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/scheduler/tasks/${taskId}/enable`, { method: "POST" });
       if (!res.ok) return false;
@@ -138,7 +138,7 @@ export function useScheduler(): UseSchedulerReturn {
     }
   }, []);
 
-  const disableTask = useCallback(async (taskId) => {
+  const disableTask = useCallback(async (taskId: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/scheduler/tasks/${taskId}/disable`, { method: "POST" });
       if (!res.ok) return false;
@@ -149,7 +149,7 @@ export function useScheduler(): UseSchedulerReturn {
     }
   }, []);
 
-  const triggerTask = useCallback(async (taskId) => {
+  const triggerTask = useCallback(async (taskId: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/scheduler/tasks/${taskId}/trigger`, { method: "POST" });
       return res.ok;
@@ -158,7 +158,7 @@ export function useScheduler(): UseSchedulerReturn {
     }
   }, []);
 
-  const deleteTask = useCallback(async (taskId) => {
+  const deleteTask = useCallback(async (taskId: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/scheduler/tasks/${taskId}`, { method: "DELETE" });
       if (!res.ok) return false;
@@ -169,7 +169,7 @@ export function useScheduler(): UseSchedulerReturn {
     }
   }, []);
 
-  const getLogs = useCallback(async (taskId) => {
+  const getLogs = useCallback(async (taskId: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/scheduler/tasks/${taskId}/logs`);
       if (!res.ok) return [];

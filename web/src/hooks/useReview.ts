@@ -137,7 +137,16 @@ export function useReview(): UseReviewReturn {
     }
   }, []);
 
-  const createPR = useCallback(async (data) => {
+  const createPR = useCallback(async (data: {
+    repository: string;
+    pr_number: number;
+    pr_title: string;
+    pr_body?: string;
+    branch?: string;
+    author?: string;
+    labels?: string[];
+    reviewers?: string[];
+  }) => {
     try {
       const res = await fetch(`${API_BASE}/api/review/pr`, {
         method: "POST",

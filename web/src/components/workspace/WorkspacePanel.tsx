@@ -59,8 +59,6 @@ export function WorkspacePanel() {
     setShowSearch(false);
   };
 
-  const selectedWorktree = worktrees.find((w) => w.id === worktreeId);
-
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
@@ -81,7 +79,7 @@ export function WorkspacePanel() {
             <select
               className="max-w-[140px] rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] dark:border-gray-600 dark:bg-gray-700"
               value={worktreeId || ""}
-              onChange={(e) => {
+              onChange={() => {
                 // worktree switch is handled by hook via external state if exposed;
                 // useWorkspace auto-selects, so we refetch here manually if needed.
                 // The hook doesn't expose setWorktreeId, so we rely on auto-selection.
