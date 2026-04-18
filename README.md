@@ -1,241 +1,146 @@
 # MeowAI Home
 
-企业级多 Agent AI 协作平台 — 开源、可商用、功能完整。
+> 一个猫咪团队，为你工作。
+
+MeowAI Home 是多 AI Agent 协作平台。像管理团队一样管理 AI——每只猫有专长、有个性、能互相协作，而你只需要说需求。
+
+```
+你: @阿橘 写个排序函数
+阿橘: 好的，这是快速排序实现...
+
+你: @墨点 审查一下
+墨点: 第 15 行边界条件有问题...
+
+你: @阿橘 修一下
+阿橘: 已修复，添加了空数组保护...
+```
 
 ---
 
-## 功能一览
+## 为什么用 MeowAI Home
 
-### 多 Agent 协作
+**不是聊天机器人，是团队。**
 
-多个 AI Agent 同时在线，通过 `@mention` 自由调度：
+| | 单模型聊天 | MeowAI Home |
+|---|---|---|
+| 能力范围 | 一个模型的知识面 | 多个模型 + 工具 + 技能的组合 |
+| 协作方式 | 你和一个 AI 对话 | 你指挥一个团队，猫之间自动协作 |
+| 任务执行 | 给建议，不执行 | 写代码、跑测试、审代码、全链路 |
+| 记忆 | 当前会话 | 三层持久记忆，跨项目保留 |
+| 成本 | 每个任务单独付费 | 复用已有订阅，零额外费用 |
 
-```
-你: @orange 帮我实现一个排序函数
-阿橘: 好的！我来写一个快速排序...
-
-你: @inky @orange 审查一下这个实现 #ideate
-墨点: 第 15 行有边界问题...
-阿橘: 了解了，我修一下...
-```
-
-- **@mention 路由** — 输入 `@猫名` 即可指定 Agent 响应
-- **并行模式** `#ideate` — 多个 Agent 同时给出独立意见
-- **串行模式** `#execute` — Agent 按顺序接力完成任务
-- **批判模式** `#critique` — 严格审查找出问题
-
-### 三层记忆系统
-
-Agent 拥有持久记忆，跨对话保留上下文：
-
-| 记忆层 | 功能 | 示例 |
-|--------|------|------|
-| **Episodic** | 对话历史存储与检索 | "上次讨论的架构方案是什么？" |
-| **Semantic** | 知识图谱，实体关系 | 记住你偏好 Python、团队用 FastAPI |
-| **Procedural** | 工作流模式，经验积累 | 记住 TDD 流程的成功率 |
-
-### 技能系统
-
-25+ 内置技能，YAML 定义，可扩展：
-
-| 类别 | 技能 | 说明 |
-|------|------|------|
-| 开发 | `#tdd` | 测试驱动开发全流程 |
-| 开发 | `debugging` | 系统化排查 Bug |
-| 开发 | `quality-gate` | 代码质量门禁 |
-| 计划 | `writing-plans` | 结构化实施计划 |
-| 协作 | `request-review` | 请求代码审查 |
-| 协作 | `cross-cat-handoff` | 跨 Agent 任务交接 |
-| 合并 | `merge-gate` | 合并前检查 |
-| 调研 | `deep-research` | 深度调研与信息聚合 |
-| MCP | `pencil-design` | 设计稿分析 |
-| MCP | `browser-automation` | 浏览器自动化 |
-
-### 多模型支持
-
-复用已有订阅，无需额外 API Key 费用：
-
-| Provider | 订阅模式 | 说明 |
-|----------|----------|------|
-| Claude (Anthropic) | Claude Max / API | 官方 CLI 子进程调用 |
-| Codex (OpenAI) | ChatGPT Plus / API | 复用 Plus 订阅 |
-| Gemini (Google) | Gemini Advanced / API | 复用 Advanced 订阅 |
-| OpenCode | 本地模型 | 本地部署，零成本 |
-
-### 工作流引擎
-
-DAG 驱动的工作流，支持模板和自定义：
-
-```
-#brainstorm @orange @inky @patch 如何优化数据库查询？
-→ 三只猫同时给出方案 → 汇总最佳建议
-
-#parallel @orange 写前端 @inky 写后端
-→ 两只猫并行工作 → 合并结果
-
-@planner 设计一个完整的用户认证系统
-→ 自动规划任务 → 分配给合适的 Agent
-```
-
-### 治理与安全
-
-**铁律系统** — 4 条不可违反的规则：
-- 数据安全：禁止删除非项目文件
-- 进程保护：禁止执行危险系统命令
-- 配置只读：核心配置不可被 Agent 修改
-- 网络边界：禁止未授权的外部请求
-
-**SOP 工作流**：
-- `#tdd` — 测试驱动开发
-- `#review` — 代码审查
-- `#deploy` — 部署发布
-
-### Web UI
-
-React + FastAPI 构建，支持实时协作：
-
-- **Thread 管理** — 多会话并行，快速切换
-- **实时聊天** — WebSocket 流式输出，Markdown 渲染
-- **Agent 浏览器** — 查看和配置 Agent
-- **技能市场** — 浏览、安装技能
-- **监控面板** — 系统状态、性能指标
-
-### 监控与可观测性
-
-| 能力 | 说明 |
-|------|------|
-| **结构化日志** | JSON 格式输出，支持查询聚合 |
-| **审计日志** | 22 种事件类型，记录所有安全操作 |
-| **Prometheus 指标** | 12 类指标，Grafana 直接对接 |
-| **健康检查** | K8s 存活/就绪探针，自动故障恢复 |
-
-### 多平台接入
-
-支持通过多种平台与 Agent 对话：
-
-| 平台 | 说明 |
-|------|------|
-| **飞书** | 企业办公场景 |
-| **钉钉** | 企业办公场景 |
-| **企业微信** | 企业办公场景 |
-| **Telegram** | 国际团队 |
-
-### 权限与认证
-
-| 能力 | 说明 |
-|------|------|
-| **JWT 认证** | Token 登录，安全可靠 |
-| **RBAC 权限** | admin / member / viewer 三级角色 |
-| **操作审计** | 记录所有敏感操作 |
+**核心设计：**
+- **猫是 Agent，不是 API** — 每只猫有角色、能力和记忆，不是简单的模型切换
+- **@mention 路由** — 像 Slack 一样 @猫，猫之间也能互相 @ 接力
+- **技能即工作流** — `#tdd`、`#review`、`#deploy` 不是标签，是完整 SOP
 
 ---
 
 ## 快速开始
 
-### Homebrew（推荐）
+### 前提
 
-```bash
-brew tap wzasd/meowai https://github.com/wzasd/MeowAI-Home
-brew install meowai
-meowai start
-```
+- Python 3.10+
+- Node.js 18+
+- 已有 Claude / ChatGPT / Gemini 订阅（或 API Key）
 
-打开 http://localhost:5173
-
-### 源码安装
+### 安装
 
 ```bash
 git clone https://github.com/wzasd/MeowAI-Home.git
 cd MeowAI-Home
 bash scripts/install.sh
+```
+
+### 配置你的猫
+
+```bash
+# 编辑猫咪配置
+cp config/cat-config.example.json config/cat-config.json
+# 填入你的订阅信息
+```
+
+### 启动
+
+```bash
 meowai start
 ```
 
-### 常用命令
-
-```bash
-meowai start          # 启动 API + Web UI
-meowai dev            # 开发模式（热重载）
-meowai check          # 环境检查
-meowai chat           # CLI 对话模式
-meowai chat --cat @sonnet  # 指定 Agent
-```
-
-启动后可用服务：
-
-| 服务 | 地址 | 说明 |
-|------|------|------|
-| Web UI | http://localhost:5173 | 前端界面 |
-| API | http://localhost:8000 | 后端接口 |
+打开 http://localhost:5173，开始和你的猫团队协作。
 
 ---
 
-## 使用方式
+## 怎么和猫团队工作
 
-### CLI
+### 1. 直接对话
 
-```bash
-# 启动对话
-meowai chat
-
-# 指定 Agent
-meowai chat --cat @review
-
-# Thread 管理
-meowai thread list
-meowai thread create "新项目"
-meowai thread switch <id>
+```
+@阿橘 用 Python 写个 LRU Cache
 ```
 
-### Web UI
+阿橘（Claude）直接给你实现。
 
-1. 打开 http://localhost:5173
-2. 创建新 Thread
-3. 输入消息，使用 `@猫名` 调度 Agent
-4. 使用 `#标签` 触发技能或工作流
+### 2. 多猫协作
 
-### API
-
-```bash
-# 创建 Thread
-curl -X POST http://localhost:8000/api/threads \
-  -H "Content-Type: application/json" \
-  -d '{"name": "我的项目"}'
-
-# 发送消息
-curl -X POST http://localhost:8000/api/threads/{id}/messages \
-  -H "Content-Type: application/json" \
-  -d '{"content": "@orange 你好", "role": "user"}'
-
-# 健康检查
-curl http://localhost:8000/api/monitoring/health
 ```
+@阿橘 @墨点 看看这个架构设计 #ideate
+```
+
+两只猫同时给出独立意见，自动汇总。
+
+### 3. 串行接力
+
+```
+@阿橘 实现登录接口 → @墨点 审查 → @阿橘 修复
+```
+
+阿橘实现，墨点审查，阿橘修复——像真正的开发流程。
+
+### 4. 触发技能
+
+```
+#tdd 写一个 URL 解析器
+```
+
+自动执行：写测试 → 写实现 → 跑测试 → 修复 → 通过。
 
 ---
 
-## 架构
+## 猫团队默认成员
+
+| 猫 | 角色 | 擅长 | 来源 |
+|---|---|---|---|
+| **阿橘** @dev | 开发实现 | 写代码、Debug、架构 | Claude |
+| **墨点** @review | 代码审查 | 找 Bug、质量把关 | Codex |
+| **花花** @research | 调研设计 | 技术调研、方案对比 | Gemini |
+
+你可以添加更多猫，每只猫绑定不同的 Provider 和模型。
+
+---
+
+## 技术架构
 
 ```
-用户 (Web/CLI/API)
+用户 (Web / CLI / 飞书 / 钉钉 / Telegram)
     │
     ▼
-FastAPI ─── WebSocket (实时推送)
+FastAPI + WebSocket ─── 实时流式输出
     │
     ▼
-A2AController ─── IntentParser ─── SkillInjector
+A2A 协作引擎 ─── Intent 解析 → 任务分发 → 猫调度
     │
-    ├─→ Agent (Claude)  ──→  CLI 子进程
-    ├─→ Agent (Codex)   ──→  CLI 子进程
-    └─→ Agent (Gemini)  ──→  CLI 子进程
+    ├─→ 阿橘 (Claude)  ──→  CLI 子进程
+    ├─→ 墨点 (Codex)   ──→  CLI 子进程
+    └─→ 花花 (Gemini)  ──→  CLI 子进程
     │
     ▼
-MemoryDB ── SQLite + FTS5
-    ├─ Episodic   (对话历史)
-    ├─ Semantic    (知识图谱)
-    └─ Procedural  (工作流模式)
+三层记忆 ── SQLite + FTS5
+    ├─ Episodic   对话历史
+    ├─ Semantic   知识图谱
+    └─ Procedural 工作流模式
 ```
 
-**技术栈**：Python 3.10+ / FastAPI / React 18 / SQLite + FTS5 / WebSocket / Prometheus
+**技术栈：** Python 3.10+ / FastAPI / React 19 / SQLite + FTS5 / WebSocket
 
 ---
 
@@ -244,41 +149,19 @@ MemoryDB ── SQLite + FTS5
 ```
 MeowAI-Home/
 ├── src/                    # Python 后端
-│   ├── cli/                # CLI 命令
-│   ├── collaboration/      # A2A 协作控制器
-│   ├── connectors/         # 多平台接入 (飞书/钉钉/企微/Telegram)
-│   ├── evolution/          # 自我进化系统
-│   ├── governance/         # 铁律与治理
+│   ├── collaboration/      # A2A 协作引擎
+│   ├── connectors/         # 多平台接入
+│   ├── providers/          # 模型适配器 (Claude/Codex/Gemini/OpenCode)
 │   ├── memory/             # 三层记忆系统
-│   ├── monitoring/         # 日志/审计/指标/健康检查
-│   ├── packs/              # Pack 预配置组
-│   ├── providers/          # 多模型适配器
-│   ├── router/             # Agent 路由
-│   ├── search/             # 向量搜索 + Hybrid RRF
 │   ├── skills/             # 技能框架
 │   ├── thread/             # Thread 管理
-│   ├── web/                # FastAPI + WebSocket
-│   └── workflow/           # DAG 工作流引擎
-├── tests/                  # 测试 (721 tests)
-├── skills/                 # 25 个 SKILL.md 定义
-├── web/                    # React 前端
-├── docs/                   # 文档与开发日记
-├── ops/                    # Prometheus/Grafana 配置
-├── scripts/                # 工具脚本 (install.sh)
-├── Formula/                # Homebrew Formula
+│   └── web/                # FastAPI + WebSocket
+├── web/                    # React 19 前端
+├── tests/                  # 测试
+├── skills/                 # 技能定义 (YAML)
+├── config/                 # 猫配置、环境配置
+└── docs/                   # 文档
 ```
-
----
-
-## 环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `MEOWAI_ENV` | 运行环境 | `development` |
-| `MEOWAI_SECRET_KEY` | JWT 密钥 | 随机生成 |
-| `MEOWAI_DB_PATH` | SQLite 路径 | `./meowai.db` |
-| `MEOWAI_LOG_LEVEL` | 日志级别 | `INFO` |
-| `MEOWAI_PORT` | API 端口 | `8000` |
 
 ---
 
