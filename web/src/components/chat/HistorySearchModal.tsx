@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, Clock, MessageSquare, ArrowRight, Loader2 } from "lucide-react";
+import { buildApiUrl } from "../../api/runtimeConfig";
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -15,7 +16,14 @@ interface SearchResult {
   catId?: string;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+interface ApiSearchResult {
+  messageId?: string;
+  id?: string;
+  threadId?: string;
+  content: string;
+  timestamp?: string;
+  catId?: string;
+}
 
 export function HistorySearchModal({ isOpen, onClose }: SearchModalProps) {
   const [query, setQuery] = useState("");
@@ -39,13 +47,13 @@ export function HistorySearchModal({ isOpen, onClose }: SearchModalProps) {
       setLoading(true);
       try {
         const res = await fetch(
-          `${API_BASE}/api/messages/search?q=${encodeURIComponent(query)}&limit=20`
+          buildApiUrl(`/api/messages/search?q=${encodeURIComponent(query)}&limit=20`)
         );
         if (res.ok) {
-          const data = await res.json();
+          const data = (await res.json()) as { results?: ApiSearchResult[] };
           setResults(
-            (data.results ?? []).map((r: any) => ({
-              id: r.messageId || r.id,
+            (data.results ?? []).map((r, index) => ({
+              id: r.messageId || r.id || `${r.threadId ?? "unknown"}-${index}`,
               threadName: r.threadId?.slice(0, 8) || "未知线程",
               content: r.content,
               role: "assistant" as const,
@@ -84,7 +92,7 @@ export function HistorySearchModal({ isOpen, onClose }: SearchModalProps) {
           <input
             ref={inputRef}
             className="flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-200"
-            placeholder="搜索对话历史..."
+            placeholder="搜索猫窝历史..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -140,7 +148,7 @@ export function HistorySearchModal({ isOpen, onClose }: SearchModalProps) {
             )
           ) : (
             <div className="px-4 py-8 text-center text-sm text-gray-400">
-              输入关键词搜索对话历史
+              输入关键词搜索猫窝历史
             </div>
           )}
         </div>

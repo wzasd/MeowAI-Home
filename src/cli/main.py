@@ -168,7 +168,7 @@ def audit(skill_id: str):
 
 @cli.command()
 @click.option('--api-only', is_flag=True, help='只启动 API，不启动前端')
-@click.option('--port', default=8000, help='API 端口')
+@click.option('--port', default=3004, help='API 端口')
 def start(api_only: bool, port: int):
     """启动 MeowAI Home 服务"""
     import subprocess
@@ -221,7 +221,7 @@ def start(api_only: bool, port: int):
             stderr=subprocess.DEVNULL,
         )
         processes.append(frontend)
-        click.echo(f"   Web: http://localhost:5173")
+        click.echo(f"   Web: http://localhost:3003")
     elif not api_only:
         click.echo("   Web: 未安装 (cd web && npm install)")
 
@@ -236,7 +236,7 @@ def start(api_only: bool, port: int):
 
 @cli.command()
 @click.option('--api-only', is_flag=True, help='只启动 API，不启动前端')
-@click.option('--port', default=8000, help='API 端口')
+@click.option('--port', default=3004, help='API 端口')
 def dev(api_only: bool, port: int):
     """开发模式启动（带热重载）"""
     import subprocess
@@ -286,7 +286,7 @@ def dev(api_only: bool, port: int):
             stderr=subprocess.DEVNULL,
         )
         processes.append(frontend)
-        click.echo(f"   Web: http://localhost:5173")
+        click.echo(f"   Web: http://localhost:3003")
 
     click.echo("\n   按 Ctrl+C 停止\n")
 

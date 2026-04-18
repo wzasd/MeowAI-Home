@@ -39,6 +39,7 @@ def _thread_to_detail(thread) -> ThreadDetailResponse:
         is_archived=thread.is_archived,
         messages=[
             MessageResponse(
+                id=str(m.id) if m.id else "",
                 role=m.role,
                 content=m.content,
                 cat_id=m.cat_id,

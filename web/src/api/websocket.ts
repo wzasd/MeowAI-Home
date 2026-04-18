@@ -1,6 +1,7 @@
 /** WebSocket manager for MeowAI Home streaming. */
 
 import type { Attachment } from "../types";
+import { buildWsUrl } from "./runtimeConfig";
 
 type WSMessage = { type: string; [key: string]: unknown };
 type Handler = (data: WSMessage) => void;
@@ -8,19 +9,28 @@ type Handler = (data: WSMessage) => void;
 export class WSManager {
   private ws: WebSocket | null = null;
   private handlers: Map<string, Handler[]> = new Map();
+  private connectionHandlers: ((connected: boolean) => void)[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private retries = 0;
   private maxRetries = 10;
 
+  onConnectionChange(handler: (connected: boolean) => void) {
+    this.connectionHandlers.push(handler);
+  }
+
+  private notifyConnection(connected: boolean) {
+    this.connectionHandlers.forEach((h) => h(connected));
+  }
+
   connect(threadId: string) {
-    const baseUrl = import.meta.env.VITE_WS_URL || `ws://localhost:8000`;
-    const url = `${baseUrl}/ws/${threadId}`;
+    const url = buildWsUrl(`/ws/${threadId}`);
 
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
       console.log("[WS] Connected to", url);
       this.retries = 0;
+      this.notifyConnection(true);
     };
 
     this.ws.onmessage = (event) => {
@@ -38,6 +48,7 @@ export class WSManager {
     };
 
     this.ws.onclose = () => {
+      this.notifyConnection(false);
       if (this.retries < this.maxRetries) {
         const delay = Math.min(1000 * Math.pow(2, this.retries), 30000);
         this.reconnectTimer = setTimeout(() => {
@@ -68,6 +79,14 @@ export class WSManager {
     console.log("[WS] send() called, readyState=", this.ws?.readyState);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "send_message", content, attachments }));
+    }
+  }
+
+  sendCommand(content: string, forceIntent: "ideate" | "execute", attachments?: Attachment[]) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({ type: "send_message", content, attachments, forceIntent })
+      );
     }
   }
 

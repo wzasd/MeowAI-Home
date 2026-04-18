@@ -184,6 +184,22 @@ export interface TestKeyResponse {
   error?: string;
 }
 
+export interface CatMetricsRow {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  duration_ms?: number;
+  success?: boolean;
+}
+
+export interface MetricsLeaderboardEntry {
+  cat_id: string;
+  total_calls: number;
+  success_rate: number;
+  avg_duration_ms: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
 export interface CapabilityBoardItem {
   id: string;
   type: "mcp" | "skill";

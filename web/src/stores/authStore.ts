@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api } from "../api/client";
 import type { AuthUserResponse, TokenResponse } from "../types";
+import { getAuthInitErrorMessage, shouldResetStoredSession } from "./authModel";
 
 interface AuthState {
   token: string | null;
@@ -30,10 +31,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ token: stored });
       try {
         const user = await api.auth.me();
-        set({ user, isLoading: false });
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-        set({ token: null, user: null, isLoading: false });
+        set({ user, isLoading: false, error: null });
+      } catch (error) {
+        if (shouldResetStoredSession(error)) {
+          localStorage.removeItem(STORAGE_KEY);
+          set({ token: null, user: null, isLoading: false, error: null });
+          return;
+        }
+
+        set({
+          token: stored,
+          user: null,
+          isLoading: false,
+          error: getAuthInitErrorMessage(error),
+        });
       }
     } else {
       set({ isLoading: false });
@@ -47,8 +58,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.setItem(STORAGE_KEY, data.access_token);
       set({ token: data.access_token, user: { username: data.username, role: data.role }, isLoading: false });
       return true;
-    } catch (e: any) {
-      set({ error: e.message || "登录失败", isLoading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "登录失败", isLoading: false });
       return false;
     }
   },
@@ -58,8 +69,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await api.auth.register(username, password, role);
       return await get().login(username, password);
-    } catch (e: any) {
-      set({ error: e.message || "注册失败", isLoading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "注册失败", isLoading: false });
       return false;
     }
   },

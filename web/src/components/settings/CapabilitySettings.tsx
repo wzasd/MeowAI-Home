@@ -8,7 +8,7 @@ const CAPABILITY_GROUPS = [
     items: [
       { id: "code_gen", label: "代码生成", icon: Code, desc: "生成高质量代码" },
       { id: "code_review", label: "代码审查", icon: Search, desc: "审查代码质量" },
-      { id: "chat", label: "对话", icon: MessageSquare, desc: "自然语言对话" },
+      { id: "chat", label: "猫窝", icon: MessageSquare, desc: "自然语言猫窝" },
       { id: "git_ops", label: "Git 操作", icon: GitBranch, desc: "版本控制操作" },
     ],
   },

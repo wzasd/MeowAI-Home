@@ -1,7 +1,10 @@
-import { useRef, useEffect, useState, type KeyboardEvent } from "react";
-import { Send, Gamepad2, Lightbulb, Wrench, HelpCircle, X, Reply } from "lucide-react";
+import { useRef, useEffect, useState, useEffectEvent, type KeyboardEvent } from "react";
+import { Send, Gamepad2, Lightbulb, Wrench, HelpCircle, X, Reply, AtSign, CornerDownLeft } from "lucide-react";
 import { useChatStore } from "../../stores/chatStore";
+import { useCatStore } from "../../stores/catStore";
 import { useThreadStore } from "../../stores/threadStore";
+import { useChatCommands } from "../../hooks/useChatCommands";
+import { buildCatMentionOptions, type CatMentionOption } from "./mentionOptions";
 import { VoiceInput } from "./VoiceInput";
 import { FileUpload, AttachmentChip } from "./FileUpload";
 import type { MessageResponse, Attachment } from "../../types";
@@ -11,46 +14,6 @@ interface InputBarProps {
   replyTo?: MessageResponse | null;
   onCancelReply?: () => void;
 }
-
-interface CatOption {
-  id: string;
-  name: string;
-  emoji: string;
-  color: string;
-  bgColor: string;
-  aliases: string[];
-  desc: string;
-}
-
-const CAT_OPTIONS: CatOption[] = [
-  {
-    id: "orange",
-    name: "阿橘",
-    emoji: "🐱",
-    color: "text-orange-700",
-    bgColor: "bg-orange-100",
-    aliases: ["@dev", "@orange"],
-    desc: "开发实现",
-  },
-  {
-    id: "inky",
-    name: "墨点",
-    emoji: "🐾",
-    color: "text-purple-700",
-    bgColor: "bg-purple-100",
-    aliases: ["@review", "@inky"],
-    desc: "代码审查",
-  },
-  {
-    id: "patch",
-    name: "花花",
-    emoji: "🌸",
-    color: "text-pink-700",
-    bgColor: "bg-pink-100",
-    aliases: ["@research", "@patch"],
-    desc: "研究设计",
-  },
-];
 
 // Slash commands
 interface SlashCommand {
@@ -101,15 +64,25 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
+  const mentionMenuRef = useRef<HTMLDivElement>(null);
+  const mentionListRef = useRef<HTMLDivElement>(null);
   const startStreaming = useChatStore((s) => s.startStreaming);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const cats = useCatStore((s) => s.cats);
+  const fetchCats = useCatStore((s) => s.fetchCats);
+
+  const { processCommand } = useChatCommands();
+
+  const syncReplyDraft = useEffectEvent((nextReplyTo: MessageResponse | null | undefined) => {
+    if (!nextReplyTo) {
+      setText("");
+    }
+  });
 
   // Clear text when reply is cancelled
   useEffect(() => {
-    if (!replyTo) {
-      setText("");
-    }
+    syncReplyDraft(replyTo);
   }, [replyTo]);
 
   // Mention autocomplete state
@@ -130,13 +103,25 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
       cmd.label.toLowerCase().includes(slashQuery.toLowerCase())
   );
 
+  const syncThreadDraft = useEffectEvent((threadId: string | null) => {
+    if (threadId) {
+      const draft = localStorage.getItem(`draft:${threadId}`);
+      setText(draft || "");
+      return;
+    }
+    setText("");
+  });
+
   // Draft persistence: load draft when thread changes
   useEffect(() => {
-    if (currentThreadId) {
-      const draft = localStorage.getItem(`draft:${currentThreadId}`);
-      setText(draft || "");
-    }
+    syncThreadDraft(currentThreadId);
   }, [currentThreadId]);
+
+  useEffect(() => {
+    if (cats.length === 0) {
+      void fetchCats();
+    }
+  }, [cats.length, fetchCats]);
 
   // Draft persistence: save draft on text change
   useEffect(() => {
@@ -150,19 +135,50 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
   }, [text, currentThreadId]);
 
   // Filter options based on query
-  const filteredOptions = CAT_OPTIONS.filter(
+  const mentionOptions = buildCatMentionOptions(cats);
+  const filteredOptions = mentionOptions.filter(
     (opt) =>
       opt.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
       opt.id.toLowerCase().includes(mentionQuery.toLowerCase()) ||
       opt.aliases.some((a) => a.toLowerCase().includes(mentionQuery.toLowerCase()))
   );
+  const activeMentionIndex = filteredOptions[selectedIndex] ? selectedIndex : 0;
+  const activeMentionOption = filteredOptions[activeMentionIndex] ?? null;
+  const secondaryMentionOptions = filteredOptions
+    .map((option, index) => ({ option, index }))
+    .filter(({ index }) => index !== activeMentionIndex);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if ((!text.trim() && attachments.length === 0) || disabled) return;
-    startStreaming();
+    const trimmed = text.trim();
 
+    // Slash command interception — before streaming / WS send
+    const result = await processCommand(trimmed);
+    if (result.consumed) {
+      if (result.forward) {
+        // Forward with forced intent (e.g. /ideate content)
+        startStreaming();
+        const event = new CustomEvent("meowai:send", {
+          detail: {
+            content: result.forward.content,
+            attachments,
+            forceIntent: result.forward.forceIntent,
+          },
+        });
+        window.dispatchEvent(event);
+      }
+      setText("");
+      setAttachments([]);
+      setShowMentions(false);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+      return;
+    }
+
+    startStreaming();
     const event = new CustomEvent("meowai:send", {
-      detail: { content: text.trim(), attachments },
+      detail: { content: trimmed, attachments },
     });
     window.dispatchEvent(event);
     setText("");
@@ -174,20 +190,34 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
     }
   };
 
-  const insertMention = (option: CatOption) => {
+  const insertMention = (option: CatMentionOption) => {
+    const primaryAlias = option.aliases[0] ?? `@${option.id}`;
     const beforeMention = text.slice(0, mentionStartPos);
     const afterMention = text.slice(mentionStartPos + mentionQuery.length + 1);
-    const newText = beforeMention + option.aliases[0] + " " + afterMention;
+    const newText = beforeMention + primaryAlias + " " + afterMention;
+    const cursorPos = mentionStartPos + primaryAlias.length + 1;
     setText(newText);
     setShowMentions(false);
-    textareaRef.current?.focus();
+    setTimeout(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(cursorPos, cursorPos);
+      }
+    }, 0);
   };
 
   const insertSlashCommand = (cmd: SlashCommand) => {
     const newText = cmd.template;
     setText(newText);
     setShowSlashMenu(false);
-    textareaRef.current?.focus();
+    setTimeout(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(newText.length, newText.length);
+      }
+    }, 0);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -273,9 +303,11 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
     if (atIndex !== -1) {
       const afterAt = beforeCursor.slice(atIndex + 1);
       const hasWhitespaceAfterAt = /\s/.test(afterAt);
+      const prevChar = atIndex > 0 ? beforeCursor.charAt(atIndex - 1) : " ";
+      const precededByWhitespace = atIndex === 0 || /\s/.test(prevChar);
 
-      // Only show if no whitespace after @ (i.e., still typing the mention)
-      if (!hasWhitespaceAfterAt && afterAt.length <= 12) {
+      // Only show if preceded by whitespace, no whitespace after @, and still within length limit
+      if (precededByWhitespace && !hasWhitespaceAfterAt && afterAt.length <= 12) {
         setMentionQuery(afterAt);
         setMentionStartPos(atIndex);
         setShowMentions(true);
@@ -288,13 +320,41 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
     }
   };
 
-  // Auto-scroll selected item into view
+  // Keep the highlighted mention visible by scrolling only the mention list itself.
   useEffect(() => {
-    if (showMentions && menuRef.current) {
-      const selectedBtn = menuRef.current.querySelector(`[data-index="${selectedIndex}"]`);
-      selectedBtn?.scrollIntoView({ block: "nearest" });
+    if (!showMentions || !mentionListRef.current) return;
+
+    const container = mentionListRef.current;
+    const selectedBtn = container.querySelector<HTMLElement>(`[data-index="${selectedIndex}"]`);
+    if (!selectedBtn) return;
+
+    const top = selectedBtn.offsetTop;
+    const bottom = top + selectedBtn.offsetHeight;
+    const viewTop = container.scrollTop;
+    const viewBottom = viewTop + container.clientHeight;
+
+    if (top < viewTop) {
+      container.scrollTop = top;
+    } else if (bottom > viewBottom) {
+      container.scrollTop = bottom - container.clientHeight;
     }
   }, [selectedIndex, showMentions]);
+
+  // Close menus on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const inTextarea = textareaRef.current?.contains(target);
+      const inMentionMenu = mentionMenuRef.current?.contains(target);
+      const inSlashMenu = slashMenuRef.current?.contains(target);
+      if (!inTextarea && !inMentionMenu && !inSlashMenu) {
+        setShowMentions(false);
+        setShowSlashMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Auto-grow textarea
   useEffect(() => {
@@ -306,109 +366,26 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
   }, [text]);
 
   return (
-    <div className="relative border-t border-gray-200 bg-white px-4 py-4 dark:border-gray-700 dark:bg-gray-800 lg:px-6">
-      {/* Reply indicator */}
+    <div className="relative border-t border-[var(--line)] bg-transparent px-4 py-4 lg:px-6">
       {replyTo && (
-        <div className="mb-2 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
+        <div className="nest-card nest-r-md mx-auto mb-3 flex max-w-4xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2 text-sm">
-            <Reply size={14} className="text-blue-500" />
-            <span className="text-gray-600 dark:text-gray-400">
-              回复: <span className="line-clamp-1 max-w-[200px] text-gray-800 dark:text-gray-200">{replyTo.content.slice(0, 50)}...</span>
+            <Reply size={14} className="text-[var(--accent)]" />
+            <span className="text-[var(--text-soft)]">
+              回复:
+              <span className="ml-1 line-clamp-1 max-w-[200px] text-[var(--text-strong)]">
+                {replyTo.content.slice(0, 50)}...
+              </span>
             </span>
           </div>
           <button
             onClick={onCancelReply}
-            className="rounded p-1 text-gray-400 hover:bg-blue-100 hover:text-gray-600 dark:hover:bg-blue-800"
+            className="nest-button-ghost flex h-8 w-8 items-center justify-center rounded-full"
           >
             <X size={14} />
           </button>
         </div>
       )}
-      {/* Slash command dropdown */}
-      {showSlashMenu && (
-        <div
-          ref={menuRef}
-          className="absolute bottom-full left-6 z-10 mb-2 w-72 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
-        >
-          <div className="max-h-60 overflow-y-auto">
-            {filteredSlashCommands.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-gray-400">无匹配命令</div>
-            ) : (
-              filteredSlashCommands.map((cmd, index) => (
-                <button
-                  key={cmd.id}
-                  data-index={index}
-                  onMouseEnter={() => setSlashSelectedIndex(index)}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    insertSlashCommand(cmd);
-                  }}
-                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                    index === slashSelectedIndex ? "bg-blue-50" : "hover:bg-gray-50"
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-600">
-                    {cmd.icon}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-gray-700">{cmd.label}</div>
-                    <div className="truncate text-xs text-gray-400">{cmd.desc}</div>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-          <div className="border-t border-gray-100 bg-gray-50 px-4 py-1.5 text-xs text-gray-400">
-            ↑↓ 选择 · Enter 确认 · Esc 关闭
-          </div>
-        </div>
-      )}
-
-      {/* Mention dropdown */}
-      {showMentions && (
-        <div
-          ref={menuRef}
-          className="absolute bottom-full left-6 z-10 mb-2 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
-        >
-          <div className="max-h-60 overflow-y-auto">
-            {filteredOptions.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-gray-400">无匹配猫咪</div>
-            ) : (
-              filteredOptions.map((option, index) => (
-                <button
-                  key={option.id}
-                  data-index={index}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  onMouseDown={(e) => {
-                    e.preventDefault(); // Prevent textarea blur
-                    insertMention(option);
-                  }}
-                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                    index === selectedIndex ? "bg-blue-50" : "hover:bg-gray-50"
-                  }`}
-                >
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-lg ${option.bgColor}`}
-                  >
-                    {option.emoji}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className={`text-sm font-semibold ${option.color}`}>{option.name}</div>
-                    <div className="truncate text-xs text-gray-400">
-                      {option.aliases.join(" / ")} · {option.desc}
-                    </div>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-          <div className="border-t border-gray-100 bg-gray-50 px-4 py-1.5 text-xs text-gray-400">
-            ↑↓ 选择 · Enter 确认 · Esc 关闭
-          </div>
-        </div>
-      )}
-
-      {/* Attachment chips */}
       {attachments.length > 0 && (
         <div className="mx-auto mb-2 flex max-w-4xl flex-wrap gap-2">
           {attachments.map((att, idx) => (
@@ -422,33 +399,198 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
           ))}
         </div>
       )}
-      <div className="mx-auto flex max-w-4xl items-end gap-2">
-        <VoiceInput
-          onTranscript={(t) => setText((prev) => prev + t)}
-          disabled={disabled}
-        />
-        <FileUpload
-          threadId={currentThreadId}
-          disabled={disabled}
-          onUpload={(att) => setAttachments((prev) => [...prev, att])}
-        />
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder="输入消息... (Enter 发送，Shift+Enter 换行，@ 提及猫咪，/ 斜杠命令)"
-          disabled={disabled}
-          rows={1}
-          className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
-        />
-        <button
-          onClick={handleSend}
-          disabled={disabled || (!text.trim() && attachments.length === 0)}
-          className="rounded-xl bg-blue-500 p-2.5 text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Send size={18} />
-        </button>
+      <div className="nest-panel nest-r-2xl overflow-visible mx-auto max-w-4xl px-3 py-3">
+        <div className="mb-3 flex flex-wrap items-center gap-2 px-1">
+          <span className="nest-kicker">输入区</span>
+          <span className="nest-chip">Enter 发送</span>
+          <span className="nest-chip">@ 提及猫咪</span>
+          <span className="nest-chip">/ 指令</span>
+        </div>
+        <div className="flex items-end gap-2">
+          <VoiceInput
+            onTranscript={(t) => setText((prev) => prev + t)}
+            disabled={disabled}
+          />
+          <FileUpload
+            threadId={currentThreadId}
+            disabled={disabled}
+            onUpload={(att) => setAttachments((prev) => [...prev, att])}
+          />
+          <div className="relative flex-1">
+            {showMentions && (
+              <div
+                ref={mentionMenuRef}
+                className="absolute bottom-[calc(100%+0.75rem)] left-0 z-20 w-full max-w-[31rem] overflow-hidden rounded-[22px] border border-[var(--border-strong)] bg-[linear-gradient(180deg,rgba(255,250,244,0.96),rgba(255,255,255,0.88))] shadow-[0_22px_48px_rgba(73,46,22,0.16)] dark:bg-[linear-gradient(180deg,rgba(34,25,20,0.97),rgba(30,23,18,0.94))]"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-3 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent-deep)]">
+                      <AtSign size={15} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-[var(--text-strong)]">
+                        {mentionQuery ? `@${mentionQuery}` : "@ 点名"}
+                      </div>
+                      <div className="text-[11px] text-[var(--text-faint)]">
+                        {filteredOptions.length} 位候选
+                      </div>
+                    </div>
+                  </div>
+                  <div className="hidden items-center gap-1 rounded-full border border-[var(--border)] bg-white/40 px-2.5 py-1 text-[11px] text-[var(--text-faint)] dark:bg-white/5 sm:flex">
+                    <CornerDownLeft size={12} />
+                    Enter
+                  </div>
+                </div>
+
+                <div ref={mentionListRef} className="max-h-64 overflow-y-auto p-2.5">
+                  {activeMentionOption ? (
+                    <div className="space-y-2">
+                      <button
+                        data-index={activeMentionIndex}
+                        onMouseEnter={() => setSelectedIndex(activeMentionIndex)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          insertMention(activeMentionOption);
+                        }}
+                        className={`group w-full overflow-hidden rounded-[18px] border px-3 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 ${activeMentionOption.toneClass} ${activeMentionOption.borderClass} ${
+                          activeMentionIndex === selectedIndex
+                            ? "shadow-[0_16px_28px_rgba(73,46,22,0.14)]"
+                            : "shadow-[0_8px_18px_rgba(73,46,22,0.08)]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] text-xl shadow-sm ${activeMentionOption.bgColor}`}
+                          >
+                            {activeMentionOption.emoji}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`truncate text-sm font-semibold ${activeMentionOption.color}`}>
+                                {activeMentionOption.name}
+                              </span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${activeMentionOption.aliasClass}`}
+                              >
+                                {activeMentionOption.aliases[0]}
+                              </span>
+                            </div>
+                            <p className="truncate text-xs text-[var(--text-soft)]">
+                              {activeMentionOption.desc}
+                            </p>
+                          </div>
+                          <div className="hidden shrink-0 rounded-full border border-[var(--border)] bg-white/45 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-soft)] dark:bg-white/5 sm:block">
+                            当前
+                          </div>
+                        </div>
+                      </button>
+
+                      {secondaryMentionOptions.length > 0 && (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {secondaryMentionOptions.map(({ option, index }) => (
+                            <button
+                              key={option.id}
+                              data-index={index}
+                              onMouseEnter={() => setSelectedIndex(index)}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                insertMention(option);
+                              }}
+                              className={`flex w-full items-center gap-2.5 rounded-[16px] border px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 ${option.toneClass} ${option.borderClass} ${
+                                index === selectedIndex
+                                  ? "shadow-[0_14px_24px_rgba(73,46,22,0.12)]"
+                                  : "shadow-[0_6px_16px_rgba(73,46,22,0.06)]"
+                              }`}
+                            >
+                              <div
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] text-lg ${option.bgColor}`}
+                              >
+                                {option.emoji}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className={`truncate text-sm font-semibold ${option.color}`}>
+                                  {option.name}
+                                </div>
+                                <div className="truncate text-[11px] text-[var(--text-faint)]">
+                                  {option.aliases[0]}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-[var(--text-faint)]">
+                        <span>支持连续点名 `@opus @砚砚`</span>
+                        <span>Esc 关闭</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-[18px] border border-dashed border-[var(--border)] bg-white/35 px-3 py-4 text-sm text-[var(--text-faint)] dark:bg-white/5">
+                      没找到匹配对象。试试输入完整句柄，例如 `@gemini`。
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {showSlashMenu && (
+              <div
+                ref={slashMenuRef}
+                className="nest-panel-strong nest-r-xl absolute bottom-[calc(100%+0.75rem)] left-0 z-10 w-72 overflow-hidden"
+              >
+                <div className="max-h-60 overflow-y-auto">
+                  {filteredSlashCommands.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-[var(--text-faint)]">无匹配命令</div>
+                  ) : (
+                    filteredSlashCommands.map((cmd, index) => (
+                      <button
+                        key={cmd.id}
+                        data-index={index}
+                        onMouseEnter={() => setSlashSelectedIndex(index)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          insertSlashCommand(cmd);
+                        }}
+                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                          index === slashSelectedIndex ? "bg-white/55 dark:bg-white/5" : "hover:bg-white/35 dark:hover:bg-white/5"
+                        }`}
+                      >
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-deep)] dark:bg-[var(--accent-soft)] dark:text-[var(--accent)]">
+                          {cmd.icon}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-[var(--text-strong)]">{cmd.label}</div>
+                          <div className="truncate text-xs text-[var(--text-faint)]">{cmd.desc}</div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="border-t border-[var(--line)] bg-white/20 px-4 py-1.5 text-xs text-[var(--text-faint)] dark:bg-white/5">
+                  ↑↓ 选择 · Enter 确认 · Esc 关闭
+                </div>
+              </div>
+            )}
+
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              placeholder="把消息、任务或灵感丢进这张工作台..."
+              disabled={disabled}
+              rows={1}
+              className="nest-field nest-r-lg w-full resize-none px-4 py-3 text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
+          <button
+            onClick={handleSend}
+            disabled={disabled || (!text.trim() && attachments.length === 0)}
+            className="nest-button-primary nest-r-md h-12 w-12 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Send size={18} />
+          </button>
+        </div>
       </div>
     </div>
   );

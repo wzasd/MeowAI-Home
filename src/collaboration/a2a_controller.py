@@ -16,7 +16,11 @@ from src.governance.iron_laws import get_iron_laws_prompt
 from src.evolution.scope_guard import ScopeGuard, DriftResult
 from src.skills.chain import ChainTracker
 from src.metrics.collector import MetricsCollector, InvocationRecord
-from src.collaboration.capability_map import get_task_type, cat_can_handle
+from src.collaboration.capability_map import (
+    get_task_type,
+    cat_can_handle,
+    get_config_capabilities,
+)
 
 
 def parse_a2a_mentions(content: str, available_cat_ids: Set[str]) -> List[str]:
@@ -25,7 +29,7 @@ def parse_a2a_mentions(content: str, available_cat_ids: Set[str]) -> List[str]:
         return []
 
     # Find all @mentions
-    pattern = r'@(\w+)'
+    pattern = r"@(\w+)"
     mentions = re.findall(pattern, content)
 
     # Filter to available cats, preserving order, deduplicating
@@ -48,12 +52,25 @@ class CatResponse:
     targetCats: Optional[List[str]] = None
     thinking: Optional[str] = None
     is_final: bool = False
+    usage: Optional[dict] = None
+    cli_command: str = ""
+    default_model: str = ""
 
 
 class A2AController:
     """A2A 协作控制器"""
 
-    def __init__(self, agents: List[Dict[str, Any]], session_chain=None, dag_executor=None, template_factory=None, memory_service=None, metrics_collector=None, broadcast_callback=None):
+    def __init__(
+        self,
+        agents: List[Dict[str, Any]],
+        session_chain=None,
+        dag_executor=None,
+        template_factory=None,
+        memory_service=None,
+        metrics_collector=None,
+        broadcast_callback=None,
+        mission_store=None,
+    ):
         self.agents = agents
         self.session_chain = session_chain
         self.dag_executor = dag_executor
@@ -61,9 +78,12 @@ class A2AController:
         self.memory_service = memory_service
         self.metrics_collector = metrics_collector or MetricsCollector()
         self.broadcast_callback = broadcast_callback
+        self.mission_store = mission_store
         self.mcp_executor = MCPExecutor()
         self.skill_injector = SkillInjector()
-        self.scope_guard = ScopeGuard(memory_service.episodic) if memory_service else None
+        self.scope_guard = (
+            ScopeGuard(memory_service.episodic) if memory_service else None
+        )
         self.chain_tracker = ChainTracker(max_depth=5)
 
         self.skill_router = None
@@ -73,17 +93,22 @@ class A2AController:
             try:
                 from src.skills.router import ManifestRouter
                 from src.skills.loader import SkillLoader
+
                 self.skill_router = ManifestRouter(manifest_path)
                 self.skill_loader = SkillLoader()
             except Exception:
                 pass
 
     async def execute(
-        self, intent: IntentResult, message: str, thread: Thread,
+        self,
+        intent: IntentResult,
+        message: str,
+        thread: Thread,
     ) -> AsyncIterator[CatResponse]:
         # Workflow path
         if intent.workflow and self.dag_executor and self.template_factory:
             from src.workflow.dag import NodeResult
+
             dag = self.template_factory.create(intent.workflow, self.agents, message)
             async for result in self.dag_executor.execute(dag, message, thread):
                 yield CatResponse(
@@ -102,7 +127,9 @@ class A2AController:
         if active_skills:
             skill_data = self._load_skill(active_skills[0]["skill_id"])
             if skill_data:
-                self.skill_injector.inject(self.agents, active_skills[0]["skill_id"], skill_data["content"])
+                self.skill_injector.inject(
+                    self.agents, active_skills[0]["skill_id"], skill_data["content"]
+                )
                 try:
                     async for r in self._dispatch(intent, message, thread):
                         yield r
@@ -113,13 +140,17 @@ class A2AController:
         async for r in self._dispatch(intent, message, thread):
             yield r
 
-    def _dispatch(self, intent: IntentResult, message: str, thread: Thread) -> AsyncIterator[CatResponse]:
+    def _dispatch(
+        self, intent: IntentResult, message: str, thread: Thread
+    ) -> AsyncIterator[CatResponse]:
         if intent.intent == "ideate":
             return self._parallel_ideate(message, thread)
         else:
             return self._serial_execute(message, thread)
 
-    async def _parallel_ideate(self, message: str, thread: Thread) -> AsyncIterator[CatResponse]:
+    async def _parallel_ideate(
+        self, message: str, thread: Thread
+    ) -> AsyncIterator[CatResponse]:
         streams = [
             self._call_cat(a["service"], a["name"], a["breed_id"], message, thread)
             for a in self.agents
@@ -127,7 +158,9 @@ class A2AController:
         async for response in self._merge_streams(streams):
             yield response
 
-    async def _serial_execute(self, message: str, thread: Thread) -> AsyncIterator[CatResponse]:
+    async def _serial_execute(
+        self, message: str, thread: Thread
+    ) -> AsyncIterator[CatResponse]:
         """Worklist execution with A2A mention detection and fairness gate."""
         max_depth = 5
         available_cat_ids = {a["breed_id"] for a in self.agents}
@@ -181,10 +214,10 @@ class A2AController:
             if not final_response:
                 continue
 
-            thread.add_message("assistant", final_response.content, cat_id=breed_id)
-
             # Parse @mentions from response and extend worklist
-            mentioned_cats = parse_a2a_mentions(final_response.content, available_cat_ids)
+            mentioned_cats = parse_a2a_mentions(
+                final_response.content, available_cat_ids
+            )
 
             # Fairness gate: don't extend worklist if user messages are waiting
             if self._user_queue_has_pending():
@@ -202,13 +235,19 @@ class A2AController:
             if final_response.targetCats:
                 for target_cat in final_response.targetCats:
                     for agent in self.agents:
-                        if agent["breed_id"] == target_cat and target_cat not in executed_cats:
+                        if (
+                            agent["breed_id"] == target_cat
+                            and target_cat not in executed_cats
+                        ):
                             worklist.append(agent)
                             break
 
-    async def _call_cat(self, service, name: str, breed_id: str, message: str, thread: Thread) -> AsyncIterator[CatResponse]:
+    async def _call_cat(
+        self, service, name: str, breed_id: str, message: str, thread: Thread
+    ) -> AsyncIterator[CatResponse]:
         task_type = get_task_type(message, [])
-        cat_capabilities = getattr(getattr(service, "config", None), "capabilities", []) or []
+        service_config = getattr(service, "config", None)
+        cat_capabilities = get_config_capabilities(service_config)
         if not cat_can_handle(cat_capabilities, task_type):
             yield CatResponse(
                 cat_id=breed_id,
@@ -231,6 +270,7 @@ class A2AController:
                 system_prompt += f"\n\n## 协作说明\n本次有多只猫参与：{', '.join(other_cats)}。请专注于你的角色，给出独立见解。"
                 # Why-First protocol for multi-agent handoffs
                 from src.evolution.why_first import build_handoff_prompt
+
                 system_prompt += f"\n\n{build_handoff_prompt()}"
 
         system_prompt += self.mcp_executor.build_tools_prompt(client)
@@ -242,12 +282,11 @@ class A2AController:
         if self.memory_service:
             memory_task = asyncio.create_task(
                 self._async_build_memory_context(message, thread.id),
-                name=f"memory_{breed_id}"
+                name=f"memory_{breed_id}",
             )
         if self.scope_guard:
             drift_task = asyncio.create_task(
-                self._async_check_drift(message, thread.id),
-                name=f"drift_{breed_id}"
+                self._async_check_drift(message, thread.id), name=f"drift_{breed_id}"
             )
 
         # Await parallel tasks
@@ -280,7 +319,24 @@ class A2AController:
         new_session_id = None
         prompt_tokens = 0
         completion_tokens = 0
+        cache_read_tokens = 0
+        cache_creation_tokens = 0
         success = True
+        start_time = time.time()
+
+        # Broadcast initial "starting" status so the UI knows this cat is active
+        if self.broadcast_callback:
+            try:
+                await self.broadcast_callback(
+                    {
+                        "type": "cat_status",
+                        "cat_id": breed_id,
+                        "cat_name": name,
+                        "content": "正在伸懒腰准备干活...",
+                    }
+                )
+            except Exception:
+                pass
 
         try:
             async for msg in service.invoke(message, options):
@@ -297,20 +353,42 @@ class A2AController:
                     yield CatResponse(
                         cat_id=breed_id,
                         cat_name=name,
+                        content="",
                         thinking=msg.content,
                         is_final=False,
                     )
+                elif msg.type == AgentMessageType.STATUS:
+                    if self.broadcast_callback:
+                        try:
+                            await self.broadcast_callback(
+                                {
+                                    "type": "cat_status",
+                                    "cat_id": breed_id,
+                                    "cat_name": name,
+                                    "content": msg.content,
+                                }
+                            )
+                        except Exception:
+                            pass
                 elif msg.type == AgentMessageType.DONE and msg.session_id:
                     new_session_id = msg.session_id
                 elif msg.type == AgentMessageType.USAGE and msg.usage:
                     prompt_tokens = msg.usage.input_tokens or 0
                     completion_tokens = msg.usage.output_tokens or 0
+                    cache_read_tokens = msg.usage.cache_read_tokens or 0
+                    cache_creation_tokens = msg.usage.cache_creation_tokens or 0
+                elif msg.type == AgentMessageType.ERROR:
+                    success = False
+                    raise RuntimeError(msg.content)
         except Exception:
             success = False
             raise
         finally:
+            latency_ms = int((time.time() - start_time) * 1000)
             if prompt_tokens == 0 and completion_tokens == 0:
-                total_content = system_prompt + message + "".join(chunks) + "".join(thinking_parts)
+                total_content = (
+                    system_prompt + message + "".join(chunks) + "".join(thinking_parts)
+                )
                 completion_tokens = int(len(total_content.encode("utf-8")) / 4)
             if self.metrics_collector:
                 record = InvocationRecord(
@@ -330,19 +408,89 @@ class A2AController:
         parsed = await self.mcp_executor.execute_callbacks(raw_content, client, thread)
 
         if self.session_chain and new_session_id:
-            self.session_chain.create(breed_id, thread.id, new_session_id)
+            tokens_used = prompt_tokens + completion_tokens
+            if session_id and new_session_id == session_id:
+                self.session_chain.update_stats(
+                    breed_id,
+                    thread.id,
+                    new_session_id,
+                    message_count=2,
+                    tokens_used=tokens_used,
+                    latency_ms=latency_ms,
+                    turn_count=1,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
+                )
+            else:
+                self.session_chain.create(
+                    breed_id,
+                    thread.id,
+                    new_session_id,
+                    message_count=2,
+                    tokens_used=tokens_used,
+                    latency_ms=latency_ms,
+                    turn_count=1,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
+                    cli_command=self._get_config_value(service_config, "cli_command"),
+                    default_model=self._get_config_value(
+                        service_config, "default_model"
+                    ),
+                )
             if self.broadcast_callback:
                 try:
                     await self.broadcast_callback({"type": "session_created"})
                 except Exception:
                     pass
 
+            # Bind session to mission task if thread has active_task_id
+            if self.mission_store and thread.active_task_id and new_session_id:
+                try:
+                    # Ensure thread is registered under task
+                    await self.mission_store.bind_thread(
+                        thread.active_task_id, thread.id
+                    )
+                    await self.mission_store.bind_session(
+                        thread.active_task_id, new_session_id
+                    )
+                    if self.broadcast_callback:
+                        await self.broadcast_callback(
+                            {
+                                "type": "session_bound",
+                                "task_id": thread.active_task_id,
+                                "session_id": new_session_id,
+                            }
+                        )
+                except Exception:
+                    pass
+
         final_thinking = "".join(thinking_parts) if thinking_parts else None
+        usage_dict = None
+        if (
+            prompt_tokens > 0
+            or completion_tokens > 0
+            or cache_read_tokens > 0
+            or cache_creation_tokens > 0
+        ):
+            usage_dict = {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "cache_read_tokens": cache_read_tokens,
+                "cache_creation_tokens": cache_creation_tokens,
+            }
         response = CatResponse(
-            cat_id=breed_id, cat_name=name,
+            cat_id=breed_id,
+            cat_name=name,
             content=parsed.clean_content,
             targetCats=parsed.targetCats if parsed.targetCats else None,
             thinking=final_thinking,
+            usage=usage_dict,
+            cli_command=self._get_config_value(service_config, "cli_command"),
+            default_model=self._get_config_value(service_config, "default_model"),
         )
 
         # Post-response processing: memory storage + entity extraction (async background)
@@ -350,23 +498,51 @@ class A2AController:
             processor = get_processor()
             processor.fire_and_forget(
                 self._async_store_episodes(thread.id, breed_id, message, response),
-                name=f"store_memories_{breed_id}"
+                name=f"store_memories_{breed_id}",
             )
             processor.fire_and_forget(
                 self._async_extract_entities(thread.id, message, response, breed_id),
-                name=f"extract_entities_{breed_id}"
+                name=f"extract_entities_{breed_id}",
             )
 
         yield CatResponse(
-            cat_id=breed_id, cat_name=name,
-            content="",
+            cat_id=breed_id,
+            cat_name=name,
+            content=parsed.clean_content,
             targetCats=parsed.targetCats if parsed.targetCats else None,
             thinking=final_thinking,
+            usage=usage_dict,
+            cli_command=self._get_config_value(service_config, "cli_command"),
+            default_model=self._get_config_value(service_config, "default_model"),
             is_final=True,
         )
 
     @staticmethod
-    async def _merge_streams(streams: List[AsyncIterator[CatResponse]]) -> AsyncIterator[CatResponse]:
+    def _get_config_value(config: Any, key: str, default: str = "") -> str:
+        if config is None:
+            return default
+
+        if isinstance(config, dict):
+            if key in config and config[key]:
+                return config[key]
+            if key == "cli_command":
+                cli = config.get("cli", {}) or {}
+                return cli.get("command", default) or default
+            if key == "default_model":
+                return config.get("defaultModel", default) or default
+            return default
+
+        value = getattr(config, key, None)
+        if value:
+            return value
+        if key == "default_model":
+            return getattr(config, "defaultModel", default) or default
+        return default
+
+    @staticmethod
+    async def _merge_streams(
+        streams: List[AsyncIterator[CatResponse]],
+    ) -> AsyncIterator[CatResponse]:
         """Merge multiple CatResponse async iterators, yielding items as they arrive."""
         if len(streams) == 1:
             async for item in streams[0]:
@@ -375,7 +551,9 @@ class A2AController:
 
         queues = [asyncio.Queue() for _ in streams]
 
-        async def _pump(stream: AsyncIterator[CatResponse], queue: asyncio.Queue) -> None:
+        async def _pump(
+            stream: AsyncIterator[CatResponse], queue: asyncio.Queue
+        ) -> None:
             async for item in stream:
                 await queue.put(item)
             await queue.put(None)  # sentinel
@@ -409,7 +587,9 @@ class A2AController:
     async def _async_build_memory_context(self, message: str, thread_id: str) -> str:
         """Async wrapper for memory context building."""
         if self.memory_service:
-            return self.memory_service.build_context(query=message, thread_id=thread_id, max_items=5)
+            return self.memory_service.build_context(
+                query=message, thread_id=thread_id, max_items=5
+            )
         return ""
 
     async def _async_check_drift(self, message: str, thread_id: str) -> DriftResult:
@@ -417,33 +597,51 @@ class A2AController:
         if self.scope_guard:
             return self.scope_guard.check_drift(message, thread_id)
         from src.evolution.scope_guard import DriftResult
-        return DriftResult(is_drift=False, score=0.0, reason="", matched_query="", topic="", similarity=1.0)
 
-    async def _async_store_episodes(self, thread_id: str, breed_id: str, message: str, response: CatResponse) -> None:
+        return DriftResult(
+            is_drift=False,
+            score=0.0,
+            reason="",
+            matched_query="",
+            topic="",
+            similarity=1.0,
+        )
+
+    async def _async_store_episodes(
+        self, thread_id: str, breed_id: str, message: str, response: CatResponse
+    ) -> None:
         """Store episodes to memory (background task)."""
         if not self.memory_service:
             return
         try:
             self.memory_service.store_episode(
-                thread_id=thread_id, role="user",
-                content=message, importance=3,
+                thread_id=thread_id,
+                role="user",
+                content=message,
+                importance=3,
             )
             self.memory_service.store_episode(
-                thread_id=thread_id, role="assistant",
-                content=response.content, cat_id=breed_id,
+                thread_id=thread_id,
+                role="assistant",
+                content=response.content,
+                cat_id=breed_id,
                 importance=5,
             )
             if response.thinking:
                 self.memory_service.store_episode(
-                    thread_id=thread_id, role="thinking",
-                    content=response.thinking, cat_id=breed_id,
+                    thread_id=thread_id,
+                    role="thinking",
+                    content=response.thinking,
+                    cat_id=breed_id,
                     importance=2,
                 )
         except Exception:
             # Background task failure is non-critical
             pass
 
-    async def _async_extract_entities(self, thread_id: str, message: str, response: CatResponse, breed_id: str) -> None:
+    async def _async_extract_entities(
+        self, thread_id: str, message: str, response: CatResponse, breed_id: str
+    ) -> None:
         """Extract entities and relations (background task)."""
         if not self.memory_service:
             return
@@ -455,15 +653,20 @@ class A2AController:
 
             if len(entities) >= 2:
                 from src.evolution.knowledge_evolution import _infer_relation_type
+
                 for i in range(len(entities)):
                     for j in range(i + 1, len(entities)):
                         name_i, type_i = entities[i][0], entities[i][1]
                         name_j, type_j = entities[j][0], entities[j][1]
-                        existing = self.memory_service.semantic.get_related(name_i, max_depth=1)
+                        existing = self.memory_service.semantic.get_related(
+                            name_i, max_depth=1
+                        )
                         related_names = {r["name"] for r in existing}
                         if name_j not in related_names:
                             rel = _infer_relation_type(type_i, type_j)
-                            self.memory_service.semantic.add_relation(name_i, name_j, rel)
+                            self.memory_service.semantic.add_relation(
+                                name_i, name_j, rel
+                            )
         except Exception:
             # Background task failure is non-critical
             pass
@@ -476,7 +679,11 @@ class A2AController:
             if msg.role == "assistant" and msg.cat_id:
                 parts.append(f"\n{msg.cat_id}: {msg.content[:300]}...")
                 # Try to extract Why-First handoff notes
-                from src.evolution.why_first import parse_handoff_note, format_handoff_note
+                from src.evolution.why_first import (
+                    parse_handoff_note,
+                    format_handoff_note,
+                )
+
                 note = parse_handoff_note(msg.content)
                 if note:
                     parts.append(f"\n[结构化交接]: {format_handoff_note(note)}")

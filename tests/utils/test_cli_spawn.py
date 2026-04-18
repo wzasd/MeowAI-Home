@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import sys
 from src.utils.cli_spawn import spawn_cli
 
 
@@ -29,3 +30,21 @@ async def test_spawn_cli_json_output():
     assert len(events) == 1
     assert events[0]["type"] == "text"
     assert events[0]["content"] == "hello"
+
+
+@pytest.mark.asyncio
+async def test_spawn_cli_nonzero_exit_with_stderr():
+    """CLI that prints JSON then writes stderr and exits non-zero should raise"""
+    script = (
+        "import sys; "
+        "print('{\"type\":\"text\",\"content\":\"hello\"}'); "
+        "print('something went wrong', file=sys.stderr); "
+        "sys.exit(1)"
+    )
+    events = []
+    with pytest.raises(RuntimeError) as exc_info:
+        async for event in spawn_cli(sys.executable, ["-c", script]):
+            events.append(event)
+    assert len(events) == 1
+    assert "exited with code 1" in str(exc_info.value)
+    assert "something went wrong" in str(exc_info.value)

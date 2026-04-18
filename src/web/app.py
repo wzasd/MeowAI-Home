@@ -32,6 +32,7 @@ from src.web.routes.queue import router as queue_router
 from src.web.routes.metrics import router as metrics_router
 from src.web.routes.tasks import router as tasks_router
 from src.web.routes.missions import router as missions_router
+from src.missions.store import MissionStore
 from src.web.routes.connectors_messages import router as connectors_messages_router
 from src.web.routes.evidence import router as evidence_router
 from src.web.routes.uploads import router as uploads_router
@@ -68,6 +69,10 @@ async def lifespan(app: FastAPI):
     tm = ThreadManager(skip_init=True)
     await tm.async_init()
     app.state.thread_manager = tm
+
+    mission_store = MissionStore()
+    await mission_store.initialize()
+    app.state.mission_store = mission_store
 
     # Initialize scheduler
     task_governance = TaskGovernance()
@@ -129,7 +134,12 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=[
+            "http://localhost:3003",
+            "http://127.0.0.1:3003",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
         allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
     )
 

@@ -4,6 +4,7 @@ from src.collaboration.capability_map import (
     get_task_type,
     required_capabilities_for_task,
     cat_can_handle,
+    get_config_capabilities,
 )
 
 
@@ -35,7 +36,7 @@ def test_get_task_type_general():
 
 
 def test_required_capabilities():
-    assert "code" in required_capabilities_for_task("implement")
+    assert "code_gen" in required_capabilities_for_task("implement")
     assert "code_review" in required_capabilities_for_task("review")
     assert "shell_exec" in required_capabilities_for_task("execute_command")
     assert "file_write" in required_capabilities_for_task("write_file")
@@ -43,6 +44,7 @@ def test_required_capabilities():
 
 
 def test_cat_can_handle():
+    assert cat_can_handle(["code_gen", "chat"], "implement") is True
     assert cat_can_handle(["code", "chat"], "implement") is True
     assert cat_can_handle(["chat"], "implement") is False
     assert cat_can_handle(["shell_exec"], "execute_command") is True
@@ -52,3 +54,15 @@ def test_cat_can_handle():
 def test_general_task_no_requirement():
     assert cat_can_handle([], "general") is True
     assert cat_can_handle(["chat"], "general") is True
+
+
+def test_get_config_capabilities_falls_back_to_roles():
+    assert get_config_capabilities({"roles": ["developer"]}) == ["code_gen"]
+
+
+def test_get_config_capabilities_respects_explicit_empty_capabilities():
+    assert get_config_capabilities({"capabilities": [], "roles": ["developer"]}) == []
+
+
+def test_get_config_capabilities_accepts_string_capability_values():
+    assert get_config_capabilities({"capabilities": "code_gen"}) == ["code_gen"]

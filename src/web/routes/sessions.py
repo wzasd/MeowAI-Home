@@ -12,27 +12,63 @@ router = APIRouter()
 
 
 class SessionResponse(BaseModel):
-    """Session record response - matches frontend expectations."""
     session_id: str
     cat_id: str
     cat_name: str
-    status: str  # "active" | "sealed"
+    status: str
     created_at: float
     consecutive_restore_failures: int
+    message_count: int = 0
+    tokens_used: int = 0
+    latency_ms: int = 0
+    turn_count: int = 0
+    cli_command: str = ""
+    default_model: str = ""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+    budget_max_prompt: int = 0
+    budget_max_context: int = 0
 
 
 class SessionListResponse(BaseModel):
     """List of sessions for a thread."""
+
     sessions: List[SessionResponse]
     thread_id: str
 
 
 class SessionActionResponse(BaseModel):
-    """Session action result."""
     success: bool
     session_id: str
     status: str
     message: str
+
+
+def _build_response(
+    record, cat_name: str, cli_command: str = "", default_model: str = "", budget_max_prompt: int = 0, budget_max_context: int = 0
+) -> SessionResponse:
+    return SessionResponse(
+        session_id=record.session_id,
+        cat_id=record.cat_id,
+        cat_name=cat_name,
+        status=record.status.value,
+        created_at=record.created_at,
+        consecutive_restore_failures=record.consecutive_restore_failures,
+        message_count=record.message_count,
+        tokens_used=record.tokens_used,
+        latency_ms=record.latency_ms,
+        turn_count=record.turn_count,
+        cli_command=cli_command,
+        default_model=default_model,
+        prompt_tokens=record.prompt_tokens,
+        completion_tokens=record.completion_tokens,
+        cache_read_tokens=record.cache_read_tokens,
+        cache_creation_tokens=record.cache_creation_tokens,
+        budget_max_prompt=budget_max_prompt,
+        budget_max_context=budget_max_context,
+    )
 
 
 @router.get("/threads/{thread_id}/sessions", response_model=List[SessionResponse])
@@ -49,48 +85,41 @@ async def list_thread_sessions(
         if tid == thread_id:
             cat = cat_registry.get(cat_id)
             cat_name = cat.display_name if cat else cat_id
+            cli_cmd = cat.cli_command if cat else ""
+            model = cat.default_model if cat else ""
+            budget_max_prompt = cat.budget.max_prompt_tokens if cat and cat.budget else 0
+            budget_max_context = cat.budget.max_context_tokens if cat and cat.budget else 0
             for record in records:
-                sessions.append(SessionResponse(
-                    session_id=record.session_id,
-                    cat_id=record.cat_id,
-                    cat_name=cat_name,
-                    status=record.status.value,
-                    created_at=record.created_at,
-                    consecutive_restore_failures=record.consecutive_restore_failures,
-                ))
+                sessions.append(_build_response(record, cat_name, cli_cmd, model, budget_max_prompt, budget_max_context))
 
-    # Sort by creation time (oldest first for timeline view)
     sessions.sort(key=lambda x: x.created_at)
 
     return sessions
 
 
-@router.get("/threads/{thread_id}/cats/{cat_id}/sessions", response_model=List[SessionResponse])
+@router.get(
+    "/threads/{thread_id}/cats/{cat_id}/sessions", response_model=List[SessionResponse]
+)
 async def list_cat_sessions(
     thread_id: str,
     cat_id: str,
     session_chain: SessionChain = Depends(get_session_chain),
     cat_registry: CatRegistry = Depends(get_cat_registry),
 ):
-    """Get sessions for a specific cat in a thread."""
     sessions = []
 
     key = (cat_id, thread_id)
     cat = cat_registry.get(cat_id)
     cat_name = cat.display_name if cat else cat_id
+    cli_cmd = cat.cli_command if cat else ""
+    model = cat.default_model if cat else ""
+    budget_max_prompt = cat.budget.max_prompt_tokens if cat and cat.budget else 0
+    budget_max_context = cat.budget.max_context_tokens if cat and cat.budget else 0
 
     if key in session_chain._chains:
         for record in session_chain._chains[key]:
-            sessions.append(SessionResponse(
-                session_id=record.session_id,
-                cat_id=record.cat_id,
-                cat_name=cat_name,
-                status=record.status.value,
-                created_at=record.created_at,
-                consecutive_restore_failures=record.consecutive_restore_failures,
-            ))
+            sessions.append(_build_response(record, cat_name, cli_cmd, model, budget_max_prompt, budget_max_context))
 
-    # Sort by creation time
     sessions.sort(key=lambda x: x.created_at)
 
     return sessions
@@ -183,13 +212,10 @@ async def get_session(
             if record.session_id == session_id:
                 cat = cat_registry.get(cat_id)
                 cat_name = cat.display_name if cat else cat_id
-                return SessionResponse(
-                    session_id=record.session_id,
-                    cat_id=record.cat_id,
-                    cat_name=cat_name,
-                    status=record.status.value,
-                    created_at=record.created_at,
-                    consecutive_restore_failures=record.consecutive_restore_failures,
-                )
+                cli_cmd = cat.cli_command if cat else ""
+                model = cat.default_model if cat else ""
+                budget_max_prompt = cat.budget.max_prompt_tokens if cat and cat.budget else 0
+                budget_max_context = cat.budget.max_context_tokens if cat and cat.budget else 0
+                return _build_response(record, cat_name, cli_cmd, model, budget_max_prompt, budget_max_context)
 
     raise HTTPException(status_code=404, detail="Session not found")

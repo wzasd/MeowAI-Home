@@ -1,8 +1,32 @@
 import { useAccountStore } from "../../stores/accountStore";
 import { useCatStore, type Cat } from "../../stores/catStore";
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2, Key, Check, X, Save, ShieldCheck } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Trash2,
+  Key,
+  Check,
+  X,
+  Save,
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+  Bot,
+  ArrowRight,
+} from "lucide-react";
 import type { AccountResponse, AuthType, Protocol } from "../../types";
+
+interface AccountFormPayload {
+  id?: string;
+  displayName: string;
+  protocol: Protocol;
+  authType: AuthType;
+  baseUrl?: string;
+  models?: string[];
+  apiKey?: string;
+}
 
 const PROTOCOL_LABELS: Record<string, string> = {
   anthropic: "Anthropic",
@@ -11,101 +35,354 @@ const PROTOCOL_LABELS: Record<string, string> = {
   opencode: "OpenCode",
 };
 
-const PROTOCOL_COLORS: Record<string, string> = {
-  anthropic: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  openai: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  google: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  opencode: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-};
+const PROTOCOL_ORDER: Protocol[] = ["anthropic", "openai", "google", "opencode"];
 
-function AccountCard({
-  account,
+/* ────────── 辅助函数 ────────── */
+
+function groupAccountsByProtocol(accounts: AccountResponse[]): Map<Protocol, AccountResponse[]> {
+  const map = new Map<Protocol, AccountResponse[]>();
+  for (const p of PROTOCOL_ORDER) map.set(p, []);
+  for (const acc of accounts) {
+    const list = map.get(acc.protocol);
+    if (list) list.push(acc);
+  }
+  return map;
+}
+
+function getBoundCats(accountId: string, cats: Cat[]): Cat[] {
+  return cats.filter((c) => c.accountRef === accountId);
+}
+
+interface Anomaly {
+  type: "unbound" | "protocol-mismatch" | "model-outside-pool";
+  catId: string;
+  catName: string;
+  detail: string;
+}
+
+function computeAnomalies(cats: Cat[], accounts: AccountResponse[]): Anomaly[] {
+  const anomalies: Anomaly[] = [];
+  for (const cat of cats) {
+    if (!cat.accountRef) {
+      anomalies.push({
+        type: "unbound",
+        catId: cat.id,
+        catName: cat.displayName || cat.name,
+        detail: "未绑定任何账号",
+      });
+      continue;
+    }
+    const account = accounts.find((a) => a.id === cat.accountRef);
+    if (!account) {
+      anomalies.push({
+        type: "unbound",
+        catId: cat.id,
+        catName: cat.displayName || cat.name,
+        detail: `绑定的账号 ${cat.accountRef} 已不存在`,
+      });
+      continue;
+    }
+    if (cat.provider !== account.protocol) {
+      anomalies.push({
+        type: "protocol-mismatch",
+        catId: cat.id,
+        catName: cat.displayName || cat.name,
+        detail: `猫 Provider 为 ${cat.provider}，但绑定账号协议为 ${account.protocol}`,
+      });
+    }
+    if (account.models && account.models.length > 0 && cat.defaultModel) {
+      if (!account.models.includes(cat.defaultModel)) {
+        anomalies.push({
+          type: "model-outside-pool",
+          catId: cat.id,
+          catName: cat.displayName || cat.name,
+          detail: `模型 ${cat.defaultModel} 不在账号模型池内`,
+        });
+      }
+    }
+  }
+  return anomalies;
+}
+
+/* ────────── 编排摘要带 ────────── */
+
+function OrchestrationSummary({
+  accounts,
+  cats,
+}: {
+  accounts: AccountResponse[];
+  cats: Cat[];
+}) {
+  const enabledProviders = new Set(accounts.map((a) => a.protocol)).size;
+  const totalAccounts = accounts.length;
+  const boundCats = cats.filter((c) => c.accountRef).length;
+  const unboundCats = cats.length - boundCats;
+  const anomalies = computeAnomalies(cats, accounts);
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-white/60 px-5 py-4 dark:bg-white/[0.04]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <span className="text-[var(--text-strong)]">
+          已启用 <strong className="text-[var(--accent-deep)]">{enabledProviders}</strong> 个 Provider
+        </span>
+        <span className="text-[var(--text-faint)]">·</span>
+        <span className="text-[var(--text-strong)]">
+          <strong className="text-[var(--accent-deep)]">{totalAccounts}</strong> 个账号可用
+        </span>
+        <span className="text-[var(--text-faint)]">·</span>
+        <span className="text-[var(--text-strong)]">
+          <strong className="text-[var(--moss)]">{boundCats}</strong> 只猫已绑定
+          {unboundCats > 0 && (
+            <span className="text-[var(--danger)]"> / {unboundCats} 只未绑定</span>
+          )}
+        </span>
+        {anomalies.length > 0 && (
+          <>
+            <span className="text-[var(--text-faint)]">·</span>
+            <span className="inline-flex items-center gap-1 text-[var(--danger)]">
+              <AlertTriangle size={14} />
+              {anomalies.length} 项异常待处理
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ────────── Provider 分段 ────────── */
+
+function ProviderSection({
+  protocol,
+  accounts,
   cats,
   onDelete,
   onEdit,
   onBindCat,
 }: {
-  account: AccountResponse;
+  protocol: Protocol;
+  accounts: AccountResponse[];
   cats: Cat[];
-  onDelete: () => void;
-  onEdit: () => void;
-  onBindCat: (catId: string) => void;
+  onDelete: (id: string) => void;
+  onEdit: (acc: AccountResponse) => void;
+  onBindCat: (catId: string, accountId: string) => void;
 }) {
-  const boundCats = cats.filter((c) => c.accountRef === account.id);
-  const unboundCats = cats.filter((c) => c.accountRef !== account.id);
+  const [expandedModels, setExpandedModels] = useState<Record<string, boolean>>({});
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+  const unboundCats = cats.filter((c) => !c.accountRef);
+
+  const toggleModels = (id: string) =>
+    setExpandedModels((p) => ({ ...p, [id]: !p[id] }));
+  const toggleCats = (id: string) =>
+    setExpandedCats((p) => ({ ...p, [id]: !p[id] }));
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">
-            <Key size={20} className="text-gray-500 dark:text-gray-400" />
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-900 dark:text-gray-100">{account.displayName}</h4>
-            <div className="mt-1 flex items-center gap-2">
-              <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${PROTOCOL_COLORS[account.protocol] || "bg-gray-100 text-gray-600"}`}>
-                {PROTOCOL_LABELS[account.protocol] || account.protocol}
-              </span>
-              <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                account.authType === "subscription"
-                  ? "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
-                  : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
-              }`}>
-                {account.authType === "subscription" ? "Subscription" : "API Key"}
-              </span>
-              {account.authType === "api_key" && (
-                account.hasApiKey
-                  ? <ShieldCheck size={14} className="text-green-500" />
-                  : <X size={14} className="text-red-500" />
-              )}
-            </div>
-          </div>
+    <div className="rounded-2xl border border-[var(--border)] bg-white/55 dark:bg-white/[0.03]">
+      {/* Section header */}
+      <div className="flex items-center gap-3 border-b border-[var(--line)] px-5 py-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-deep)] dark:text-[var(--accent)]">
+          <Key size={16} />
         </div>
-        <div className="flex items-center gap-1">
-          <button onClick={onEdit} className="rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" title="Edit">
-            <Save size={14} />
-          </button>
-          {!account.isBuiltin && (
-            <button onClick={onDelete} className="rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Delete">
-              <Trash2 size={14} />
-            </button>
-          )}
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--text-strong)]">
+            {PROTOCOL_LABELS[protocol] || protocol}
+          </h3>
+          <p className="text-xs text-[var(--text-faint)]">
+            {accounts.length} 个账号 · {accounts.reduce((sum, a) => sum + getBoundCats(a.id, cats).length, 0)} 只猫已绑定
+          </p>
         </div>
       </div>
 
-      {/* Bound cats */}
-      {boundCats.length > 0 && (
-        <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-700">
-          <span className="text-xs text-gray-500 dark:text-gray-400">Bound cats:</span>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {boundCats.map((cat) => (
-              <span key={cat.id} className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                {cat.displayName || cat.name}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Account rows */}
+      <div className="divide-y divide-[var(--line)]">
+        {accounts.map((account) => {
+          const bound = getBoundCats(account.id, cats);
+          const modelsOpen = expandedModels[account.id];
+          const catsOpen = expandedCats[account.id];
 
-      {/* Bind additional cat */}
-      {unboundCats.length > 0 && (
-        <div className="mt-2">
-          <select
-            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            defaultValue=""
-            onChange={(e) => { if (e.target.value) onBindCat(e.target.value); }}
-          >
-            <option value="">Bind a cat...</option>
-            {unboundCats.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.displayName || cat.name}</option>
-            ))}
-          </select>
+          return (
+            <div key={account.id} className="px-5 py-3">
+              {/* Row 1: account identity + actions */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-sm font-medium text-[var(--text-strong)]">
+                      {account.displayName}
+                    </span>
+                    {account.isBuiltin && (
+                      <span className="rounded-full bg-[rgba(183,103,37,0.08)] px-2 py-0.5 text-[10px] font-medium text-[var(--accent-deep)] dark:bg-[rgba(230,162,93,0.1)]">
+                        内置
+                      </span>
+                    )}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        account.authType === "api_key"
+                          ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400"
+                          : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                      }`}
+                    >
+                      {account.authType === "api_key" ? "API Key" : "订阅"}
+                    </span>
+                    {account.authType === "api_key" &&
+                      (account.hasApiKey ? (
+                        <ShieldCheck size={12} className="text-green-500" />
+                      ) : (
+                        <X size={12} className="text-red-500" />
+                      ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-faint)]">
+                    {account.baseUrl && <span>{account.baseUrl}</span>}
+                    {account.models && account.models.length > 0 && (
+                      <span>{account.models.length} 个模型</span>
+                    )}
+                    {bound.length > 0 && (
+                      <span className="text-[var(--moss)]">{bound.length} 只猫已绑定</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => onEdit(account)}
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-faint)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-strong)]"
+                    title="编辑"
+                  >
+                    <Save size={13} />
+                  </button>
+                  {!account.isBuiltin && (
+                    <button
+                      onClick={() => onDelete(account.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-faint)] transition-colors hover:bg-[rgba(164,70,42,0.08)] hover:text-[var(--danger)]"
+                      title="删除"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 2: expandable model list */}
+              {account.models && account.models.length > 0 && (
+                <div className="mt-2">
+                  <button
+                    onClick={() => toggleModels(account.id)}
+                    className="inline-flex items-center gap-1 text-xs text-[var(--text-faint)] transition-colors hover:text-[var(--text-soft)]"
+                  >
+                    {modelsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    可用模型
+                  </button>
+                  {modelsOpen && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {account.models.map((m) => (
+                        <span
+                          key={m}
+                          className="inline-flex items-center rounded-full border border-[var(--border)] bg-white/70 px-2.5 py-0.5 text-[11px] text-[var(--text-soft)] dark:bg-white/[0.04]"
+                        >
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Row 3: bound cats + bind more */}
+              <div className="mt-2">
+                <button
+                  onClick={() => toggleCats(account.id)}
+                  className="inline-flex items-center gap-1 text-xs text-[var(--text-faint)] transition-colors hover:text-[var(--text-soft)]"
+                >
+                  {catsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  已绑定猫咪
+                </button>
+                {catsOpen && (
+                  <div className="mt-1.5 space-y-2">
+                    {bound.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {bound.map((cat) => (
+                          <span
+                            key={cat.id}
+                            className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                          >
+                            <Bot size={10} />
+                            {cat.displayName || cat.name}
+                            {cat.defaultModel && (
+                              <span className="text-blue-500/60">· {cat.defaultModel}</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[var(--text-faint)]">暂无猫咪绑定</p>
+                    )}
+                    {/* Quick bind unbound cats */}
+                    {unboundCats.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-[var(--text-faint)]">绑定更多:</span>
+                        <select
+                          className="rounded-lg border border-[var(--border)] bg-white/70 px-2 py-1 text-[11px] text-[var(--text-soft)] dark:bg-white/[0.04]"
+                          defaultValue=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              onBindCat(e.target.value, account.id);
+                              e.target.value = "";
+                            }
+                          }}
+                        >
+                          <option value="">选择猫咪...</option>
+                          {unboundCats.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.displayName || cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {accounts.length === 0 && (
+        <div className="px-5 py-6 text-center">
+          <p className="text-xs text-[var(--text-faint)]">该 Provider 下暂无账号</p>
         </div>
       )}
     </div>
   );
 }
+
+/* ────────── 异常队列 ────────── */
+
+function AnomalyQueue({ anomalies }: { anomalies: Anomaly[] }) {
+  if (anomalies.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-[rgba(164,70,42,0.18)] bg-[rgba(164,70,42,0.04)] px-5 py-4 dark:bg-[rgba(164,70,42,0.06)]">
+      <div className="flex items-center gap-2 text-sm font-medium text-[var(--danger)]">
+        <AlertTriangle size={16} />
+        待处理队列 · {anomalies.length} 项异常
+      </div>
+      <div className="mt-3 space-y-2">
+        {anomalies.map((a) => (
+          <div
+            key={`${a.type}-${a.catId}`}
+            className="flex items-center gap-3 rounded-xl border border-[rgba(164,70,42,0.1)] bg-white/60 px-3 py-2 text-xs dark:bg-white/[0.03]"
+          >
+            <Bot size={14} className="shrink-0 text-[var(--text-faint)]" />
+            <span className="font-medium text-[var(--text-strong)]">{a.catName}</span>
+            <ArrowRight size={12} className="text-[var(--text-faint)]" />
+            <span className="text-[var(--danger)]">{a.detail}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ────────── 账号编辑器 ────────── */
 
 function AccountEditor({
   account,
@@ -113,15 +390,7 @@ function AccountEditor({
   onCancel,
 }: {
   account?: AccountResponse;
-  onSave: (data: {
-    id?: string;
-    displayName: string;
-    protocol: Protocol;
-    authType: AuthType;
-    baseUrl?: string;
-    models?: string[];
-    apiKey?: string;
-  }) => void;
+  onSave: (data: AccountFormPayload) => void;
   onCancel: () => void;
 }) {
   const store = useAccountStore();
@@ -143,7 +412,12 @@ function AccountEditor({
     setTesting(true);
     setTestResult(null);
     try {
-      const valid = await store.testKey(account?.id || "__new__", form.apiKey, form.protocol, form.baseUrl || undefined);
+      const valid = await store.testKey(
+        account?.id || "__new__",
+        form.apiKey,
+        form.protocol,
+        form.baseUrl || undefined
+      );
       setTestResult(valid);
     } catch {
       setTestResult(false);
@@ -152,30 +426,30 @@ function AccountEditor({
   };
 
   return (
-    <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+    <div className="space-y-3 rounded-[1.35rem] border border-[rgba(47,116,103,0.18)] bg-[linear-gradient(145deg,rgba(247,243,233,0.88),rgba(255,255,255,0.72))] p-5 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.55)] dark:bg-[rgba(18,24,29,0.92)]">
       {!isEdit && (
         <label className="block">
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Account ID</span>
+          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">账号 ID</span>
           <input
             className="mt-1 block w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             value={form.id}
             onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))}
-            placeholder="e.g. my-anthropic-key"
+            placeholder="例如 my-anthropic-key"
           />
         </label>
       )}
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Display Name</span>
+          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">显示名称</span>
           <input
             className="mt-1 block w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             value={form.displayName}
             onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-            placeholder="My Anthropic Key"
+            placeholder="我的 Anthropic 账号"
           />
         </label>
         <label className="block">
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Protocol</span>
+          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">协议</span>
           <select
             className="mt-1 block w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             value={form.protocol}
@@ -189,14 +463,14 @@ function AccountEditor({
         </label>
       </div>
       <label className="block">
-        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Auth Type</span>
+        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">认证方式</span>
         <select
           className="mt-1 block w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           value={form.authType}
           onChange={(e) => setForm((f) => ({ ...f, authType: e.target.value as AuthType }))}
         >
           <option value="api_key">API Key</option>
-          <option value="subscription">Subscription (CLI OAuth)</option>
+          <option value="subscription">订阅授权（CLI OAuth）</option>
         </select>
       </label>
       {form.authType === "api_key" && (
@@ -216,13 +490,21 @@ function AccountEditor({
                 disabled={!form.apiKey || testing}
                 className="flex items-center gap-1 rounded bg-gray-100 px-3 py-1.5 text-xs font-medium hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:hover:bg-gray-600"
               >
-                {testing ? <Loader2 size={12} className="animate-spin" /> : testResult === true ? <Check size={12} className="text-green-500" /> : testResult === false ? <X size={12} className="text-red-500" /> : null}
-                Test
+                {testing ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : testResult === true ? (
+                  <Check size={12} className="text-green-500" />
+                ) : testResult === false ? (
+                  <X size={12} className="text-red-500" />
+                ) : null}
+                测试密钥
               </button>
             </div>
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Base URL (optional)</span>
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+              Base URL（可选）
+            </span>
             <input
               className="mt-1 block w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               value={form.baseUrl}
@@ -233,7 +515,9 @@ function AccountEditor({
         </>
       )}
       <label className="block">
-        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Models (comma-separated, optional)</span>
+        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+          模型列表（逗号分隔，可选）
+        </span>
         <input
           className="mt-1 block w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           value={form.models}
@@ -242,8 +526,11 @@ function AccountEditor({
         />
       </label>
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">
-          Cancel
+        <button
+          onClick={onCancel}
+          className="rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+        >
+          取消
         </button>
         <button
           onClick={() => {
@@ -253,53 +540,74 @@ function AccountEditor({
               protocol: form.protocol,
               authType: form.authType,
               baseUrl: form.baseUrl || undefined,
-              models: form.models ? form.models.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+              models: form.models
+                ? form.models
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                : undefined,
               apiKey: form.apiKey || undefined,
             });
           }}
           className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
         >
           <Save size={14} />
-          {isEdit ? "Update" : "Create"}
+          {isEdit ? "保存修改" : "创建账号"}
         </button>
       </div>
     </div>
   );
 }
 
+/* ────────── 主页面 ────────── */
+
 export function AccountSettings() {
-  const store = useAccountStore();
-  const catStore = useCatStore();
+  const accounts = useAccountStore((s) => s.accounts);
+  const loading = useAccountStore((s) => s.loading);
+  const fetchAccounts = useAccountStore((s) => s.fetchAccounts);
+  const createAccount = useAccountStore((s) => s.createAccount);
+  const updateAccount = useAccountStore((s) => s.updateAccount);
+  const deleteAccount = useAccountStore((s) => s.deleteAccount);
+  const bindCat = useAccountStore((s) => s.bindCat);
+
+  const cats = useCatStore((s) => s.cats);
+  const fetchCats = useCatStore((s) => s.fetchCats);
+
   const [showEditor, setShowEditor] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountResponse | null>(null);
 
   useEffect(() => {
-    store.fetchAccounts();
-    if (catStore.cats.length === 0) catStore.fetchCats();
-  }, []);
+    void fetchAccounts();
+    void fetchCats();
+  }, [fetchAccounts, fetchCats]);
 
-  const handleCreate = async (data: {
-    id?: string; displayName: string; protocol: Protocol; authType: AuthType;
-    baseUrl?: string; models?: string[]; apiKey?: string;
-  }) => {
+  const grouped = groupAccountsByProtocol(accounts);
+  const anomalies = computeAnomalies(cats, accounts);
+
+  const handleCreate = async (data: AccountFormPayload) => {
     if (!data.id) return;
-    await store.createAccount(data as any);
+    await createAccount({ ...data, id: data.id });
     setShowEditor(false);
   };
 
-  const handleUpdate = async (data: Record<string, unknown>) => {
+  const handleUpdate = async (data: AccountFormPayload) => {
     if (!editingAccount) return;
-    await store.updateAccount(editingAccount.id, data);
+    const payload: Record<string, unknown> = { ...data };
+    await updateAccount(editingAccount.id, payload);
     setEditingAccount(null);
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Delete this account?")) {
-      await store.deleteAccount(id);
+    if (confirm("确定删除该账号？已绑定的猫咪将变为未绑定状态。")) {
+      await deleteAccount(id);
     }
   };
 
-  if (store.loading && store.accounts.length === 0) {
+  const handleBindCat = async (catId: string, accountId: string) => {
+    await bindCat(catId, accountId);
+  };
+
+  if (loading && accounts.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -308,29 +616,28 @@ export function AccountSettings() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Configure AI provider accounts. Use API keys for independent quota, or subscription for CLI OAuth.
-          </p>
-        </div>
+    <div className="space-y-5">
+      {/* 编排摘要带 */}
+      <OrchestrationSummary accounts={accounts} cats={cats} />
+
+      {/* 新增账号按钮 */}
+      <div className="flex justify-end">
         <button
-          onClick={() => { setShowEditor(true); setEditingAccount(null); }}
-          className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+          onClick={() => {
+            setShowEditor(true);
+            setEditingAccount(null);
+          }}
+          className="nest-button-primary flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium"
         >
           <Plus size={14} />
-          Add Account
+          新增账号
         </button>
       </div>
 
+      {/* 编辑器 */}
       {showEditor && !editingAccount && (
-        <AccountEditor
-          onSave={handleCreate}
-          onCancel={() => setShowEditor(false)}
-        />
+        <AccountEditor onSave={handleCreate} onCancel={() => setShowEditor(false)} />
       )}
-
       {editingAccount && (
         <AccountEditor
           account={editingAccount}
@@ -339,18 +646,42 @@ export function AccountSettings() {
         />
       )}
 
-      <div className="grid gap-3">
-        {store.accounts.map((account) => (
-          <AccountCard
-            key={account.id}
-            account={account}
-            cats={catStore.cats}
-            onDelete={() => handleDelete(account.id)}
-            onEdit={() => { setEditingAccount(account); setShowEditor(false); }}
-            onBindCat={(catId) => store.bindCat(catId, account.id)}
-          />
-        ))}
+      {/* Provider 分段编排 */}
+      <div className="space-y-4">
+        {PROTOCOL_ORDER.map((protocol) => {
+          const list = grouped.get(protocol) || [];
+          if (list.length === 0) return null;
+          return (
+            <ProviderSection
+              key={protocol}
+              protocol={protocol}
+              accounts={list}
+              cats={cats}
+              onDelete={handleDelete}
+              onEdit={(acc) => {
+                setEditingAccount(acc);
+                setShowEditor(false);
+              }}
+              onBindCat={handleBindCat}
+            />
+          );
+        })}
       </div>
+
+      {/* 异常队列 */}
+      <AnomalyQueue anomalies={anomalies} />
+
+      {/* 空状态 */}
+      {accounts.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white/45 px-5 py-10 text-center dark:bg-white/[0.03]">
+          <div className="text-sm font-medium text-[var(--text-strong)]">
+            还没有 Provider 账号
+          </div>
+          <p className="mt-2 text-sm leading-7 text-[var(--text-soft)]">
+            先创建可用账号，配置认证方式和模型列表，再把猫咪绑定到对应通道上。
+          </p>
+        </div>
+      )}
     </div>
   );
 }

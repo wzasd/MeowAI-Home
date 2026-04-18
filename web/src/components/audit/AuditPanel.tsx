@@ -71,14 +71,13 @@ export function AuditPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Filters */}
-      <div className="border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
+      <div className="border-b border-[var(--line)] px-3 py-3">
         <div className="flex items-center gap-2">
-          <Filter size={14} className="text-gray-400" />
+          <Filter size={14} className="text-[var(--text-faint)]" />
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value as any)}
-            className="rounded border border-gray-200 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-700"
+            className="nest-field nest-r-sm px-2 py-1.5 text-xs"
           >
             <option value="all">全部类别</option>
             <option value="file">文件</option>
@@ -90,7 +89,7 @@ export function AuditPanel() {
           <select
             value={levelFilter}
             onChange={(e) => setLevelFilter(e.target.value as any)}
-            className="rounded border border-gray-200 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-700"
+            className="nest-field nest-r-sm px-2 py-1.5 text-xs"
           >
             <option value="all">全部级别</option>
             <option value="info">信息</option>
@@ -101,14 +100,13 @@ export function AuditPanel() {
         </div>
       </div>
 
-      {/* Entries */}
       <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
           <div className="flex h-full items-center justify-center">
-            <Loader2 size={24} className="animate-spin text-gray-400" />
+            <Loader2 size={24} className="animate-spin text-[var(--text-faint)]" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-400">
+          <div className="flex h-full items-center justify-center text-sm text-[var(--text-faint)]">
             暂无审计日志
           </div>
         ) : (
@@ -117,23 +115,23 @@ export function AuditPanel() {
             return (
               <div
                 key={entry.id}
-                className="mb-2 rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-800"
+                className="nest-card nest-r-md mb-2 p-3"
               >
                 <div className="flex items-start gap-2">
-                  <Icon size={14} className="mt-0.5 text-gray-400" />
+                  <Icon size={14} className="mt-0.5 text-[var(--text-faint)]" />
                   <div className="flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${LEVEL_COLORS[entry.level]}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${LEVEL_COLORS[entry.level]}`}>
                         {entry.level.toUpperCase()}
                       </span>
-                      <span className="text-[10px] text-gray-400">{entry.timestamp}</span>
-                      <span className="rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-600 dark:bg-gray-700">
+                      <span className="text-[10px] text-[var(--text-faint)]">{entry.timestamp}</span>
+                      <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] text-[var(--text-soft)]">
                         @{entry.actor}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-700 dark:text-gray-300">
-                      <span className="font-mono text-gray-500">{entry.action}</span>
-                      <span className="mx-1 text-gray-300">·</span>
+                    <p className="mt-1 text-xs text-[var(--text-strong)]">
+                      <span className="font-mono text-[var(--text-faint)]">{entry.action}</span>
+                      <span className="mx-1 text-[var(--line)]">·</span>
                       {entry.details}
                     </p>
                   </div>

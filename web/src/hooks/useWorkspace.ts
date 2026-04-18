@@ -10,6 +10,7 @@ import type {
   SearchResult,
   GitStatus,
   TerminalResult,
+  TerminalJobEvent,
 } from "../api/client";
 
 export type {
@@ -20,6 +21,7 @@ export type {
   GitStatusItem,
   GitStatus,
   TerminalResult,
+  TerminalJobEvent,
 } from "../api/client";
 
 function mergeSubtree(nodes: TreeNode[], targetPath: string, children: TreeNode[]): TreeNode[] {
@@ -203,9 +205,38 @@ export function useWorkspace() {
     [worktreeId]
   );
 
+  // Terminal job (streaming)
+  const createTerminalJob = useCallback(
+    async (command: string): Promise<{ job_id: string; status: string } | null> => {
+      if (!worktreeId) return null;
+      try {
+        return await api.workspace.createTerminalJob(worktreeId, command);
+      } catch {
+        return null;
+      }
+    },
+    [worktreeId]
+  );
+
+  const cancelTerminalJob = useCallback(async (jobId: string): Promise<{ success: boolean; status: string } | null> => {
+    try {
+      return await api.workspace.cancelTerminalJob(jobId);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const streamTerminalJob = useCallback(
+    (jobId: string, onEvent: (event: TerminalJobEvent) => void, onError?: () => void) => {
+      return api.workspace.streamTerminalJob(jobId, onEvent, onError);
+    },
+    []
+  );
+
   return {
     worktrees,
     worktreeId,
+    setWorktreeId,
     tree,
     file,
     openFilePath,
@@ -224,5 +255,8 @@ export function useWorkspace() {
     gitStatus,
     gitDiff,
     runCommand,
+    createTerminalJob,
+    cancelTerminalJob,
+    streamTerminalJob,
   };
 }

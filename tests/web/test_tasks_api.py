@@ -2,15 +2,24 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from src.web.routes.tasks import router, _tasks
+from src.web.routes.tasks import router, DEFAULT_DB_PATH
 
 
 @pytest.fixture(autouse=True)
 def clear_tasks():
     """Clear tasks storage before each test."""
-    _tasks.clear()
+    import asyncio
+    import aiosqlite
+
+    async def _clean():
+        db = await aiosqlite.connect(DEFAULT_DB_PATH)
+        await db.execute("DELETE FROM thread_tasks")
+        await db.commit()
+        await db.close()
+
+    asyncio.run(_clean())
     yield
-    _tasks.clear()
+    asyncio.run(_clean())
 
 
 @pytest.fixture
@@ -49,8 +58,9 @@ class TestListTasks:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2
-        assert data[0]["id"] == "task-1"
-        assert data[1]["id"] == "task-2"
+        ids = {d["id"] for d in data}
+        assert "task-1" in ids
+        assert "task-2" in ids
 
     def test_list_tasks_filtered_by_thread(self, client):
         """Test listing tasks filtered by threadId."""

@@ -15,10 +15,13 @@ export function useWebSocket() {
   const addLocalMessage = useChatStore((s) => s.addLocalMessage);
   const addStreamingResponse = useChatStore((s) => s.addStreamingResponse);
   const addStreamingThinking = useChatStore((s) => s.addStreamingThinking);
+  const setStreamingStatus = useChatStore((s) => s.setStreamingStatus);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
   const setSkill = useChatStore((s) => s.setSkill);
   const setIntentMode = useChatStore((s) => s.setIntentMode);
+  const setWsConnected = useChatStore((s) => s.setWsConnected);
+  const addSystemError = useChatStore((s) => s.addSystemError);
 
   // Track first mount (skip Strict Mode double-fire)
   useEffect(() => {
@@ -45,11 +48,15 @@ export function useWebSocket() {
     wsRef.current = ws;
     connectedIdRef.current = currentThreadId;
 
+    ws.onConnectionChange((connected) => {
+      setWsConnected(connected);
+    });
+
     ws.on("message_sent", (data) => {
       addLocalMessage(data.message as MessageResponse);
     });
     ws.on("intent_mode", (data) => {
-      setIntentMode(data.mode as string);
+      setIntentMode(data.mode as string, data.cats as string[]);
     });
     ws.on("cat_response", (data) => {
       addStreamingResponse(data.cat_id as string, {
@@ -65,6 +72,9 @@ export function useWebSocket() {
     ws.on("thinking", (data) => {
       addStreamingThinking(data.cat_id as string, data.content as string);
     });
+    ws.on("cat_status", (data) => {
+      setStreamingStatus(data.cat_id as string, data.content as string);
+    });
     ws.on("done", () => {
       stopStreaming();
       fetchMessages(currentThreadId);
@@ -74,6 +84,7 @@ export function useWebSocket() {
     });
     ws.on("error", (data) => {
       console.error("WebSocket error:", data.message);
+      addSystemError(`连接异常: ${data.message || "服务端处理失败"}`);
       stopStreaming();
     });
 
@@ -86,14 +97,21 @@ export function useWebSocket() {
   // Stable send handler — always uses wsRef
   useEffect(() => {
     const handleSend = (e: Event) => {
-      const { content, attachments } = (e as CustomEvent<{ content: string; attachments?: Attachment[] }>).detail;
+      const { content, attachments, forceIntent } = (e as CustomEvent<{ content: string; attachments?: Attachment[]; forceIntent?: "ideate" | "execute" }>).detail;
       if (!content) return;
+
       const ws = wsRef.current;
-      if (ws && ws.isConnected) {
+      if (!ws || !ws.isConnected) {
+        console.error("[WS] Cannot send - ws=", !!ws, "connected=", ws?.isConnected);
+        return;
+      }
+
+      if (forceIntent) {
+        console.log("[WS] Sending with intent:", forceIntent, content.substring(0, 60));
+        ws.sendCommand(content, forceIntent, attachments);
+      } else {
         console.log("[WS] Sending:", content.substring(0, 60));
         ws.send(content, attachments);
-      } else {
-        console.error("[WS] Cannot send - ws=", !!ws, "connected=", ws?.isConnected);
       }
     };
     const handleInteractiveAction = (e: Event) => {

@@ -19,6 +19,7 @@ import {
   Zap,
   Layers,
   Settings2,
+  MessageSquare,
 } from "lucide-react";
 import {
   useMissions,
@@ -27,6 +28,8 @@ import {
   type Priority,
 } from "../../hooks/useMissions";
 import { useWorkflows } from "../../hooks/useWorkflows";
+import { PageHeader } from "../ui/PageHeader";
+import { SlidingNav } from "../ui/SlidingNav";
 
 const PRIORITY_COLORS: Record<Priority, string> = {
   P0: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -46,47 +49,80 @@ const STATUS_CONFIG: Record<TaskStatus, { icon: typeof Circle; color: string; la
 function TaskCard({
   task,
   onStatusChange,
+  onOpenThread,
 }: {
   task: MissionTask;
   onStatusChange?: (id: string, status: TaskStatus) => void;
+  onOpenThread?: (threadId: string) => void;
 }) {
   const cfg = STATUS_CONFIG[task.status];
   const StatusIcon = cfg.icon;
+  const sessionCount = task.session_ids?.length ?? 0;
+  const threadCount = task.thread_ids?.length ?? 0;
+  const firstThreadId = task.thread_ids?.[0];
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
+    <div className="nest-card nest-r-lg p-4 transition-transform duration-150 hover:-translate-y-0.5">
       <div className="flex items-start justify-between gap-2">
-        <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200">{task.title}</h4>
-        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${PRIORITY_COLORS[task.priority]}`}>
+        <div className="min-w-0 flex-1">
+          <h4 className="truncate text-sm font-semibold text-[var(--text-strong)]">{task.title}</h4>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${PRIORITY_COLORS[task.priority]}`}
+        >
           {task.priority}
         </span>
       </div>
-      <p className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">{task.description}</p>
+      <p className="mt-2 line-clamp-2 text-xs leading-6 text-[var(--text-soft)]">
+        {task.description}
+      </p>
       {task.progress !== undefined && task.progress < 100 && (
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-          <div className="h-full rounded-full bg-blue-500" style={{ width: `${task.progress}%` }} />
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[rgba(141,104,68,0.12)] dark:bg-white/10">
+          <div
+            className="h-full rounded-full bg-[var(--accent)]"
+            style={{ width: `${task.progress}%` }}
+          />
         </div>
       )}
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {task.ownerCat && (
-          <span className="flex items-center gap-0.5 rounded bg-purple-50 px-1.5 py-0.5 text-[10px] text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
+          <span className="nest-chip px-2 py-1 text-[10px] text-[var(--moss)]">
             <User size={10} /> {task.ownerCat}
           </span>
         )}
         {task.tags.slice(0, 2).map((tag) => (
-          <span key={tag} className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+          <span key={tag} className="nest-chip px-2 py-1 text-[10px]">
             {tag}
           </span>
         ))}
         {task.dueDate && (
-          <span className="flex items-center gap-0.5 text-[10px] text-red-500">
+          <span className="flex items-center gap-0.5 text-[10px] text-[var(--danger)]">
             <AlertCircle size={10} /> {task.dueDate.slice(5)}
           </span>
+        )}
+        {sessionCount > 0 && (
+          <span className="nest-chip px-2 py-1 text-[10px] text-[var(--accent)]">
+            {sessionCount} 会话
+          </span>
+        )}
+        {threadCount > 0 && (
+          <span className="nest-chip px-2 py-1 text-[10px] text-[var(--text-soft)]">
+            {threadCount} 猫窝
+          </span>
+        )}
+        {firstThreadId && onOpenThread && (
+          <button
+            onClick={() => onOpenThread(firstThreadId)}
+            className="nest-button-secondary rounded-full p-1.5 text-[var(--text-faint)] hover:text-[var(--accent)]"
+            title="进入猫窝"
+          >
+            <MessageSquare size={12} />
+          </button>
         )}
         {onStatusChange && task.status !== "done" && (
           <button
             onClick={() => onStatusChange(task.id, task.status === "doing" ? "done" : "doing")}
-            className="ml-auto rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-green-500 dark:hover:bg-gray-700"
+            className="nest-button-secondary ml-auto rounded-full p-1.5 text-[var(--text-faint)] hover:text-green-600"
             title={task.status === "doing" ? "标记完成" : "开始处理"}
           >
             <StatusIcon size={12} className={cfg.color} />
@@ -101,26 +137,39 @@ function KanbanColumn({
   status,
   tasks,
   onStatusChange,
+  onOpenThread,
 }: {
   status: TaskStatus;
   tasks: MissionTask[];
   onStatusChange?: (id: string, status: TaskStatus) => void;
+  onOpenThread?: (threadId: string) => void;
 }) {
   const cfg = STATUS_CONFIG[status];
   const StatusIcon = cfg.icon;
   return (
-    <div className="flex w-64 shrink-0 flex-col lg:w-72">
-      <div className="mb-2 flex items-center gap-1.5">
-        <StatusIcon size={14} className={cfg.color} />
-        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{cfg.label}</span>
-        <span className="rounded bg-gray-200 px-1 py-0.5 text-[10px] text-gray-600 dark:bg-gray-600 dark:text-gray-300">{tasks.length}</span>
+    <div className="nest-panel-strong nest-r-xl flex w-[18.2rem] shrink-0 flex-col p-3 lg:w-[19rem]">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/55 text-[var(--accent)] dark:bg-white/5">
+          <StatusIcon size={14} className={cfg.color} />
+        </div>
+        <div>
+          <span className="text-sm font-semibold text-[var(--text-strong)]">{cfg.label}</span>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-[var(--text-faint)]">
+            {tasks.length} cards
+          </div>
+        </div>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto">
         {tasks.map((task) => (
-          <TaskCard key={task.id} task={task} onStatusChange={onStatusChange} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            onStatusChange={onStatusChange}
+            onOpenThread={onOpenThread}
+          />
         ))}
         {tasks.length === 0 && (
-          <div className="rounded-lg border-2 border-dashed border-gray-200 p-4 text-center text-xs text-gray-400 dark:border-gray-700">
+          <div className="nest-r-md border border-dashed border-[var(--border)] bg-white/20 p-4 text-center text-xs text-[var(--text-faint)] dark:bg-white/5">
             暂无任务
           </div>
         )}
@@ -145,28 +194,40 @@ function StatsBar({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-4">
-        <Loader2 size={14} className="animate-spin text-gray-400" />
+      <div className="flex items-center gap-3 text-[var(--text-faint)]">
+        <Loader2 size={14} className="animate-spin" />
+        <span className="text-xs">正在整理任务温度...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-4">
-      <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-        <Target size={14} /> {total} 任务
-      </div>
-      <div className="flex items-center gap-1 text-xs text-green-600">
-        <CheckCircle2 size={14} /> {done} 完成
-      </div>
-      <div className="flex items-center gap-1 text-xs text-amber-600">
-        <Clock size={14} /> {doing} 进行中
-      </div>
-      <div className="flex items-center gap-1 text-xs text-red-600">
-        <AlertTriangle size={14} /> {blocked} 阻塞
-      </div>
-      <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-        <div className="h-full rounded-full bg-green-500" style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }} />
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      {[
+        { icon: Target, label: "全部任务", value: total, tone: "text-[var(--text-soft)]" },
+        { icon: CheckCircle2, label: "已完成", value: done, tone: "text-green-600" },
+        { icon: Clock, label: "进行中", value: doing, tone: "text-amber-600" },
+        { icon: AlertTriangle, label: "阻塞", value: blocked, tone: "text-[var(--danger)]" },
+      ].map((item) => (
+        <div key={item.label} className="nest-card nest-r-md px-4 py-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[var(--text-faint)]">{item.label}</span>
+            <item.icon size={14} className={item.tone} />
+          </div>
+          <div className="mt-2 text-xl font-semibold text-[var(--text-strong)]">{item.value}</div>
+        </div>
+      ))}
+      <div className="nest-card nest-r-md px-4 py-3 sm:col-span-2 xl:col-span-4">
+        <div className="flex items-center justify-between text-xs text-[var(--text-faint)]">
+          <span>完成热度</span>
+          <span>{total > 0 ? Math.round((done / total) * 100) : 0}%</span>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[rgba(141,104,68,0.12)] dark:bg-white/10">
+          <div
+            className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--moss))]"
+            style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -204,43 +265,59 @@ function CreateTaskModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="nest-panel-strong nest-r-xl w-full max-w-md p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">新建任务</h3>
-          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+          <div>
+            <div className="nest-kicker">任务创建</div>
+            <h3 className="nest-title mt-2 text-2xl font-semibold text-[var(--text-strong)]">
+              新建任务
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="nest-button-ghost flex h-9 w-9 items-center justify-center rounded-full"
+          >
             <X size={18} />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">标题</label>
+            <label className="mb-1 block text-sm font-medium text-[var(--text-soft)]">标题</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="nest-field nest-r-sm w-full px-3 py-2.5 text-sm"
               placeholder="输入任务标题..."
               autoFocus
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">描述</label>
+            <label className="mb-1 block text-sm font-medium text-[var(--text-soft)]">描述</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="nest-field nest-r-sm w-full px-3 py-2.5 text-sm"
               rows={3}
               placeholder="输入任务描述..."
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">优先级</label>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-soft)]">
+                优先级
+              </label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="nest-field nest-r-sm w-full px-3 py-2.5 text-sm"
               >
                 <option value="P0">P0 - 最高</option>
                 <option value="P1">P1 - 高</option>
@@ -249,11 +326,11 @@ function CreateTaskModal({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">状态</label>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-soft)]">状态</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="nest-field nest-r-sm w-full px-3 py-2.5 text-sm"
               >
                 <option value="backlog">待办池</option>
                 <option value="todo">待开始</option>
@@ -267,14 +344,14 @@ function CreateTaskModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              className="nest-button-secondary px-4 py-2 text-sm"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={!title.trim()}
-              className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              className="nest-button-primary px-4 py-2 text-sm disabled:opacity-50"
             >
               创建
             </button>
@@ -291,45 +368,38 @@ function WorkflowTab() {
   return (
     <div className="h-full overflow-auto p-4">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">工作流模板</h3>
-        <button
-          onClick={fetchWorkflows}
-          className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
+        <h3 className="nest-title text-xl font-semibold text-[var(--text-strong)]">工作流模板</h3>
+        <button onClick={fetchWorkflows} className="nest-button-secondary px-3 py-1.5 text-xs">
           刷新
         </button>
       </div>
-      {loading && <Loader2 size={20} className="animate-spin text-gray-400" />}
-      {error && <div className="text-xs text-red-500">{error}</div>}
+      {loading && <Loader2 size={20} className="animate-spin text-[var(--text-faint)]" />}
+      {error && <div className="text-xs text-[var(--danger)]">{error}</div>}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {templates.map((t) => (
-          <div
-            key={t.id}
-            className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-          >
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
-              <GitBranch size={14} className="text-blue-500" />
+          <div key={t.id} className="nest-card nest-r-lg p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-strong)]">
+              <GitBranch size={14} className="text-[var(--accent)]" />
               {t.name}
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.description}</p>
+            <p className="mt-2 text-xs leading-6 text-[var(--text-soft)]">{t.description}</p>
           </div>
         ))}
       </div>
 
-      <h3 className="mb-3 mt-6 text-sm font-semibold text-gray-800 dark:text-gray-200">活跃工作流</h3>
+      <h3 className="nest-title mb-3 mt-6 text-xl font-semibold text-[var(--text-strong)]">
+        活跃工作流
+      </h3>
       {active.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center text-xs text-gray-400 dark:border-gray-700">
+        <div className="nest-r-lg border border-dashed border-[var(--border)] bg-white/15 p-4 text-center text-xs text-[var(--text-faint)]">
           暂无活跃工作流
         </div>
       ) : (
         <div className="space-y-2">
           {active.map((w) => (
-            <div
-              key={w.id}
-              className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <span className="text-sm text-gray-800 dark:text-gray-200">{w.name || w.id}</span>
-              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+            <div key={w.id} className="nest-card nest-r-md flex items-center justify-between p-4">
+              <span className="text-sm text-[var(--text-strong)]">{w.name || w.id}</span>
+              <span className="nest-chip px-2 py-1 text-[10px] text-[var(--accent)]">
                 {w.status || "running"}
               </span>
             </div>
@@ -354,35 +424,38 @@ function FeaturesTab({ tasks }: { tasks: MissionTask[] }) {
       done: ft.filter((x) => x.status === "done").length,
       doing: ft.filter((x) => x.status === "doing").length,
       blocked: ft.filter((x) => x.status === "blocked").length,
-      progress: ft.length > 0 ? Math.round((ft.filter((x) => x.status === "done").length / ft.length) * 100) : 0,
+      progress:
+        ft.length > 0
+          ? Math.round((ft.filter((x) => x.status === "done").length / ft.length) * 100)
+          : 0,
     }));
   }, [tasks]);
 
   return (
     <div className="h-full overflow-auto p-4">
-      <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
+      <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[var(--text-strong)]">
         <BarChart3 size={16} />
         功能模块进度
       </div>
       {features.length === 0 ? (
-        <div className="flex h-64 items-center justify-center text-gray-400">
+        <div className="flex h-64 items-center justify-center text-[var(--text-faint)]">
           暂无功能数据
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((f) => (
-            <div
-              key={f.name}
-              className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
-            >
+            <div key={f.name} className="nest-card nest-r-lg p-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200">{f.name}</h4>
-                <span className="text-xs text-gray-500">{f.progress}%</span>
+                <h4 className="text-sm font-semibold text-[var(--text-strong)]">{f.name}</h4>
+                <span className="text-xs text-[var(--text-faint)]">{f.progress}%</span>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                <div className="h-full rounded-full bg-green-500" style={{ width: `${f.progress}%` }} />
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-[rgba(141,104,68,0.12)] dark:bg-white/10">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--moss))]"
+                  style={{ width: `${f.progress}%` }}
+                />
               </div>
-              <div className="mt-2 flex gap-3 text-[10px] text-gray-500 dark:text-gray-400">
+              <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-[var(--text-soft)]">
                 <span>{f.total} 任务</span>
                 <span className="text-green-600">{f.done} 完成</span>
                 <span className="text-amber-600">{f.doing} 进行中</span>
@@ -396,7 +469,13 @@ function FeaturesTab({ tasks }: { tasks: MissionTask[] }) {
   );
 }
 
-function ResolutionsTab({ tasks, onStatusChange }: { tasks: MissionTask[]; onStatusChange?: (id: string, status: TaskStatus) => void }) {
+function ResolutionsTab({
+  tasks,
+  onStatusChange,
+}: {
+  tasks: MissionTask[];
+  onStatusChange?: (id: string, status: TaskStatus) => void;
+}) {
   const blocked = tasks.filter((t) => t.status === "blocked");
   const dueSoon = tasks.filter((t) => {
     if (!t.dueDate || t.status === "done") return false;
@@ -411,23 +490,23 @@ function ResolutionsTab({ tasks, onStatusChange }: { tasks: MissionTask[]; onSta
     <div className="h-full overflow-auto p-4">
       {blocked.length > 0 && (
         <div className="mb-6">
-          <h3 className="mb-2 flex items-center gap-1 text-sm font-semibold text-red-600">
+          <h3 className="mb-2 flex items-center gap-1 text-sm font-semibold text-[var(--danger)]">
             <AlertTriangle size={14} /> 阻塞项 ({blocked.length})
           </h3>
           <div className="space-y-2">
             {blocked.map((t) => (
               <div
                 key={t.id}
-                className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-3 dark:border-red-900/30 dark:bg-red-900/10"
+                className="nest-card nest-r-md flex items-center justify-between border-red-100/70 p-4 dark:border-red-900/30"
               >
                 <div>
-                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.title}</div>
-                  <div className="text-xs text-gray-500">{t.description}</div>
+                  <div className="text-sm font-semibold text-[var(--text-strong)]">{t.title}</div>
+                  <div className="text-xs text-[var(--text-soft)]">{t.description}</div>
                 </div>
                 {onStatusChange && (
                   <button
                     onClick={() => onStatusChange(t.id, "todo")}
-                    className="rounded bg-white px-2 py-1 text-xs text-gray-700 shadow-sm hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200"
+                    className="nest-button-secondary px-3 py-1.5 text-xs"
                   >
                     解除阻塞
                   </button>
@@ -445,17 +524,12 @@ function ResolutionsTab({ tasks, onStatusChange }: { tasks: MissionTask[]; onSta
           </h3>
           <div className="space-y-2">
             {dueSoon.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 p-3 dark:border-amber-900/30 dark:bg-amber-900/10"
-              >
+              <div key={t.id} className="nest-card nest-r-md flex items-center justify-between p-4">
                 <div>
-                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.title}</div>
-                  <div className="text-xs text-gray-500">截止: {t.dueDate}</div>
+                  <div className="text-sm font-semibold text-[var(--text-strong)]">{t.title}</div>
+                  <div className="text-xs text-[var(--text-soft)]">截止: {t.dueDate}</div>
                 </div>
-                <span className="rounded bg-white px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-gray-700">
-                  {t.priority}
-                </span>
+                <span className="nest-chip px-2 py-1 text-[10px] text-amber-700">{t.priority}</span>
               </div>
             ))}
           </div>
@@ -464,17 +538,14 @@ function ResolutionsTab({ tasks, onStatusChange }: { tasks: MissionTask[]; onSta
 
       {unassigned.length > 0 && (
         <div className="mb-6">
-          <h3 className="mb-2 flex items-center gap-1 text-sm font-semibold text-blue-600">
+          <h3 className="mb-2 flex items-center gap-1 text-sm font-semibold text-[var(--moss)]">
             <User size={14} /> 待分配 ({unassigned.length})
           </h3>
           <div className="space-y-2">
             {unassigned.map((t) => (
-              <div
-                key={t.id}
-                className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-              >
-                <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.title}</div>
-                <div className="text-xs text-gray-500">{t.description}</div>
+              <div key={t.id} className="nest-card nest-r-md p-4">
+                <div className="text-sm font-semibold text-[var(--text-strong)]">{t.title}</div>
+                <div className="text-xs text-[var(--text-soft)]">{t.description}</div>
               </div>
             ))}
           </div>
@@ -482,7 +553,7 @@ function ResolutionsTab({ tasks, onStatusChange }: { tasks: MissionTask[]; onSta
       )}
 
       {blocked.length === 0 && dueSoon.length === 0 && unassigned.length === 0 && (
-        <div className="flex h-64 items-center justify-center text-gray-400">
+        <div className="flex h-64 items-center justify-center text-[var(--text-faint)]">
           <div className="text-center">
             <CheckCircle2 size={32} className="mx-auto mb-2 text-green-500" />
             <p>当前无需要处理的风险项</p>
@@ -493,7 +564,7 @@ function ResolutionsTab({ tasks, onStatusChange }: { tasks: MissionTask[]; onSta
   );
 }
 
-export function MissionHubPage() {
+export function MissionHubPage({ onOpenThread }: { onOpenThread?: (threadId: string) => void }) {
   const {
     tasks,
     loading,
@@ -510,7 +581,8 @@ export function MissionHubPage() {
   const [tab, setTab] = useState<"projects" | "workflows" | "features" | "resolutions">("projects");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  const filtered = filterPriority === "all" ? tasks : tasks.filter((t) => t.priority === filterPriority);
+  const filtered =
+    filterPriority === "all" ? tasks : tasks.filter((t) => t.priority === filterPriority);
   const columns: TaskStatus[] = ["backlog", "todo", "doing", "blocked", "done"];
 
   const handleCreateTask = async (taskData: Omit<MissionTask, "id" | "createdAt">) => {
@@ -522,98 +594,93 @@ export function MissionHubPage() {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Mission Hub</h2>
-          <div className="flex items-center gap-2">
+    <div className="flex h-full flex-col bg-transparent">
+      <PageHeader
+        eyebrow="任务墙"
+        title="猫窝任务墙"
+        description="把捡回来的任务、阻塞和进度摊成一整面墙。重要的事情先亮出来，不让它们埋在列表里。"
+        actions={
+          <>
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
+              className="nest-button-primary px-4 py-2 text-xs font-semibold"
             >
               <Plus size={12} /> 新任务
             </button>
             {tab === "projects" && (
-              <div className="flex rounded border border-gray-200 dark:border-gray-700">
+              <div className="nest-panel flex rounded-full p-1">
                 <button
                   onClick={() => setView("kanban")}
-                  className={`rounded-l px-2 py-1 ${view === "kanban" ? "bg-gray-100 dark:bg-gray-700" : ""}`}
+                  className={`nest-tab ${view === "kanban" ? "nest-tab-active" : ""}`}
                 >
-                  <LayoutGrid size={14} className="text-gray-600 dark:text-gray-400" />
+                  <LayoutGrid size={14} />
                 </button>
                 <button
                   onClick={() => setView("list")}
-                  className={`rounded-r px-2 py-1 ${view === "list" ? "bg-gray-100 dark:bg-gray-700" : ""}`}
+                  className={`nest-tab ${view === "list" ? "nest-tab-active" : ""}`}
                 >
-                  <List size={14} className="text-gray-600 dark:text-gray-400" />
+                  <List size={14} />
                 </button>
               </div>
             )}
+          </>
+        }
+      >
+        {tab === "projects" && <StatsBar tasks={tasks} loading={loading} stats={stats} />}
+
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="w-full max-w-[22rem]">
+            <SlidingNav
+              items={[
+                { key: "projects", label: "项目", icon: Layers },
+                { key: "workflows", label: "工作流", icon: GitBranch },
+                { key: "features", label: "功能", icon: Zap },
+                { key: "resolutions", label: "决议队列", icon: Settings2 },
+              ]}
+              activeKey={tab}
+              onChange={(key) =>
+                setTab(key as "projects" | "workflows" | "features" | "resolutions")
+              }
+              className="nest-nav-strip-compact"
+            />
           </div>
+          {tab === "projects" && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-[var(--text-faint)]">筛选</span>
+              {(["all", "P0", "P1", "P2", "P3"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setFilterPriority(p)}
+                  className={`rounded-full px-3 py-1.5 text-[10px] font-medium ${
+                    filterPriority === p
+                      ? PRIORITY_COLORS[p as Priority] || "bg-gray-200 text-gray-800"
+                      : "nest-chip"
+                  }`}
+                >
+                  {p === "all" ? "全部" : p}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+      </PageHeader>
 
-        <div className="mt-2 flex items-center justify-between">
-          <div className="flex gap-1">
-            {[
-              { key: "projects" as const, label: "项目", icon: Layers },
-              { key: "workflows" as const, label: "工作流", icon: GitBranch },
-              { key: "features" as const, label: "功能", icon: Zap },
-              { key: "resolutions" as const, label: "决议队列", icon: Settings2 },
-            ].map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`flex items-center gap-1 rounded px-3 py-1 text-xs font-medium ${
-                  tab === t.key ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                <t.icon size={12} /> {t.label}
-              </button>
-            ))}
-          </div>
-          {tab === "projects" && <StatsBar tasks={tasks} loading={loading} stats={stats} />}
-        </div>
-
-        {/* Priority filter — projects only */}
-        {tab === "projects" && (
-          <div className="mt-2 flex items-center gap-1">
-            <span className="text-xs text-gray-400">筛选:</span>
-            {(["all", "P0", "P1", "P2", "P3"] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setFilterPriority(p)}
-                className={`rounded px-2 py-0.5 text-[10px] font-medium ${
-                  filterPriority === p
-                    ? PRIORITY_COLORS[p as Priority] || "bg-gray-200 text-gray-800"
-                    : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                {p === "all" ? "全部" : p}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Error message */}
       {error && (
-        <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
+        <div className="nest-r-md mx-4 mt-3 flex items-center gap-2 bg-red-50/80 px-4 py-3 text-xs text-[var(--danger)] dark:bg-red-900/20 lg:mx-6">
           <AlertCircle size={14} />
           {error}
-          <button onClick={fetchTasks} className="ml-auto text-blue-600 hover:underline">
+          <button onClick={fetchTasks} className="ml-auto underline decoration-dotted">
             重试
           </button>
         </div>
       )}
 
-      {/* Content */}
       <div className="flex-1 overflow-hidden">
         {tab === "projects" && (
           <div className="h-full overflow-x-auto p-4">
             {loading && tasks.length === 0 ? (
               <div className="flex h-full items-center justify-center">
-                <Loader2 size={32} className="animate-spin text-gray-400" />
+                <Loader2 size={32} className="animate-spin text-[var(--text-faint)]" />
               </div>
             ) : view === "kanban" ? (
               <div className="flex gap-4" style={{ minWidth: columns.length * 280 }}>
@@ -623,6 +690,7 @@ export function MissionHubPage() {
                     status={status}
                     tasks={filtered.filter((t) => t.status === status)}
                     onStatusChange={handleStatusChange}
+                    onOpenThread={onOpenThread}
                   />
                 ))}
               </div>
@@ -632,20 +700,47 @@ export function MissionHubPage() {
                   const cfg = STATUS_CONFIG[task.status];
                   const CfgIcon = cfg.icon;
                   return (
-                    <div
-                      key={task.id}
-                      className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
-                    >
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</span>
+                    <div key={task.id} className="nest-card nest-r-md flex items-center gap-3 p-4">
+                      <span
+                        className={`rounded-full px-2 py-1 text-[10px] font-bold ${PRIORITY_COLORS[task.priority]}`}
+                      >
+                        {task.priority}
+                      </span>
                       <div className="flex-1">
-                        <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200">{task.title}</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{task.description}</p>
+                        <h4 className="text-sm font-semibold text-[var(--text-strong)]">
+                          {task.title}
+                        </h4>
+                        <p className="text-xs text-[var(--text-soft)]">{task.description}</p>
                       </div>
                       <span className="flex items-center gap-0.5 text-xs">
                         <CfgIcon size={12} className={cfg.color} />
-                        <span className="text-gray-500 dark:text-gray-400">{cfg.label}</span>
+                        <span className="text-[var(--text-soft)]">{cfg.label}</span>
                       </span>
-                      {task.ownerCat && <span className="text-xs text-purple-600 dark:text-purple-400">@{task.ownerCat}</span>}
+                      {task.ownerCat && (
+                        <span className="text-xs text-[var(--moss)]">@{task.ownerCat}</span>
+                      )}
+                      {(task.session_ids?.length ?? 0) > 0 && (
+                        <span className="text-[10px] text-[var(--accent)]">
+                          {task.session_ids!.length} 会话
+                        </span>
+                      )}
+                      {(task.thread_ids?.length ?? 0) > 0 && (
+                        <span className="text-[10px] text-[var(--text-soft)]">
+                          {task.thread_ids!.length} 猫窝
+                        </span>
+                      )}
+                      {task.thread_ids?.[0] && onOpenThread && (
+                        <button
+                          onClick={() => {
+                            const threadId = task.thread_ids?.[0];
+                            if (threadId) onOpenThread(threadId);
+                          }}
+                          className="nest-button-secondary rounded-full p-1.5 text-[var(--text-faint)] hover:text-[var(--accent)]"
+                          title="进入猫窝"
+                        >
+                          <MessageSquare size={12} />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -655,10 +750,11 @@ export function MissionHubPage() {
         )}
         {tab === "workflows" && <WorkflowTab />}
         {tab === "features" && <FeaturesTab tasks={tasks} />}
-        {tab === "resolutions" && <ResolutionsTab tasks={tasks} onStatusChange={handleStatusChange} />}
+        {tab === "resolutions" && (
+          <ResolutionsTab tasks={tasks} onStatusChange={handleStatusChange} />
+        )}
       </div>
 
-      {/* Create Task Modal */}
       <CreateTaskModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}

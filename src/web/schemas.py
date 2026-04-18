@@ -27,6 +27,7 @@ class MessageSend(BaseModel):
 # --- Response schemas ---
 
 class MessageResponse(BaseModel):
+    id: str
     role: str
     content: str
     cat_id: Optional[str] = None

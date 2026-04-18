@@ -1,5 +1,14 @@
 import { useState, useEffect } from "react";
-import { Menu, Settings, Inbox, Target, Code, MessageSquare, PanelRightOpen, PanelRightClose } from "lucide-react";
+import {
+  Menu,
+  Settings,
+  Inbox,
+  Target,
+  Code,
+  MessageSquare,
+  PanelRightOpen,
+  PanelRightClose,
+} from "lucide-react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { ThreadSidebar } from "./components/thread/ThreadSidebar";
 import { ChatArea } from "./components/chat/ChatArea";
@@ -12,7 +21,9 @@ import { MissionHubPage } from "./components/mission/MissionHubPage";
 import { WorkspacePanel } from "./components/workspace/WorkspacePanel";
 import { useThemeStore } from "./stores/themeStore";
 import { useAuthStore } from "./stores/authStore";
+import { useThreadStore } from "./stores/threadStore";
 import { LoginModal } from "./components/auth/LoginModal";
+import { SlidingNav } from "./components/ui/SlidingNav";
 
 type Page = "chat" | "signals" | "mission" | "workspace";
 
@@ -27,12 +38,14 @@ export default function App() {
   useWebSocket();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<Page>("chat");
   const { isDarkMode } = useThemeStore();
   const token = useAuthStore((s) => s.token);
   const isAuthLoading = useAuthStore((s) => s.isLoading);
   const initAuth = useAuthStore((s) => s.init);
+  const currentThreadId = useThreadStore((s) => s.currentThreadId);
+  const currentNav = NAV_ITEMS.find((item) => item.key === currentPage) ?? NAV_ITEMS[0]!;
 
   useEffect(() => {
     initAuth();
@@ -41,7 +54,11 @@ export default function App() {
   // Close mobile menu on escape
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsMobileMenuOpen(false);
+      if (e.key === "Escape") {
+        setIsMobileMenuOpen(false);
+        setIsSettingsOpen(false);
+        setIsRightPanelOpen(false);
+      }
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
@@ -49,105 +66,140 @@ export default function App() {
 
   if (isAuthLoading) {
     return (
-      <div className={`flex h-screen items-center justify-center bg-gray-50 transition-colors dark:bg-gray-900 ${isDarkMode ? "dark" : ""}`}>
-        <div className="text-gray-500 dark:text-gray-400">初始化中...</div>
+      <div className={isDarkMode ? "dark" : ""}>
+        <div className="flex h-screen items-center justify-center bg-[var(--bg-canvas)] text-[var(--text-soft)] transition-colors">
+          <div className="nest-panel-strong nest-r-xl px-8 py-6 text-sm">正在整理猫窝工作室...</div>
+        </div>
       </div>
     );
   }
 
   if (!token) {
     return (
-      <div className={`flex h-screen overflow-hidden bg-gray-50 transition-colors dark:bg-gray-900 ${isDarkMode ? "dark" : ""}`}>
-        <LoginModal />
+      <div className={isDarkMode ? "dark" : ""}>
+        <div className="flex h-screen overflow-hidden bg-[var(--bg-canvas)] transition-colors">
+          <LoginModal />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`flex h-screen overflow-hidden bg-gray-50 transition-colors dark:bg-gray-900 ${isDarkMode ? "dark" : ""}`}>
-      {/* Mobile overlay */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`${
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } fixed left-0 top-0 z-30 flex h-full w-64 flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out dark:border-gray-700 dark:bg-gray-800 lg:static lg:w-64 lg:translate-x-0 lg:transition-none xl:w-72`}
-      >
-        {/* Nav tabs at top of sidebar */}
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-2 py-2 dark:border-gray-700">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => { setCurrentPage(item.key); setIsMobileMenuOpen(false); }}
-              className={`flex flex-1 items-center justify-center gap-1 rounded px-1 py-1.5 text-xs font-medium transition-colors ${
-                currentPage === item.key
-                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                  : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-              }`}
-              title={item.label}
-            >
-              <item.icon size={14} />
-              <span className="hidden lg:inline">{item.shortLabel}</span>
-            </button>
-          ))}
+    <div className={isDarkMode ? "dark" : ""}>
+      <div className="relative flex h-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-strong)] transition-colors lg:gap-4 lg:p-4">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute left-[-8%] top-[-10%] h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(229,162,93,0.28),transparent_66%)] blur-3xl" />
+          <div className="absolute bottom-[-18%] right-[-10%] h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(54,129,112,0.18),transparent_64%)] blur-3xl" />
         </div>
-        <ThreadSidebar onCloseMobile={() => setIsMobileMenuOpen(false)} onOpenSettings={() => setIsSettingsOpen(true)} />
-      </aside>
 
-      {/* Main content area */}
-      <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Mobile header */}
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-800 lg:hidden">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsMobileMenuOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="打开菜单">
-              <Menu size={20} className="text-gray-600 dark:text-gray-300" />
-            </button>
-            <span className="text-lg font-bold text-gray-800 dark:text-gray-100">MeowAI</span>
-          </div>
-          <div className="flex items-center gap-1">
-            {currentPage === "chat" && (
-              <button onClick={() => setIsRightPanelOpen(!isRightPanelOpen)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                {isRightPanelOpen ? <PanelRightClose size={18} className="text-gray-600 dark:text-gray-300" /> : <PanelRightOpen size={18} className="text-gray-600 dark:text-gray-300" />}
-              </button>
-            )}
-            <button onClick={() => setIsSettingsOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="设置">
-              <Settings size={18} className="text-gray-600 dark:text-gray-300" />
-            </button>
-            <ThemeToggle />
-          </div>
-        </header>
+        {isMobileMenuOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-black/35 backdrop-blur-sm lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
 
-        {/* Page content */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Main page */}
-          <div className="relative flex-1 overflow-hidden">
-            {currentPage === "chat" && (
-              <ChatArea
-                isRightPanelOpen={isRightPanelOpen}
-                onToggleRightPanel={() => setIsRightPanelOpen(!isRightPanelOpen)}
+        <aside
+          className={`${
+            isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          } fixed left-4 top-4 z-30 flex h-[calc(100%-2rem)] w-[20rem] flex-col transition-transform duration-300 ease-in-out lg:static lg:left-auto lg:top-auto lg:h-full lg:w-72 lg:translate-x-0 lg:transition-none`}
+        >
+          <div className="nest-panel-strong nest-r-2xl flex h-full min-h-0 flex-col overflow-hidden">
+            <div className="border-b border-[var(--line)] px-3 py-3">
+              <SlidingNav
+                items={NAV_ITEMS.map((item) => ({
+                  key: item.key,
+                  icon: item.icon,
+                  label: item.shortLabel,
+                }))}
+                activeKey={currentPage}
+                onChange={(key) => {
+                  setCurrentPage(key as Page);
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            </div>
+            <ThreadSidebar
+              onCloseMobile={() => setIsMobileMenuOpen(false)}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+            />
+          </div>
+        </aside>
+
+        <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="px-3 pt-3 lg:hidden">
+            <div className="nest-panel nest-r-lg flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="nest-button-ghost flex h-9 w-9 items-center justify-center rounded-full"
+                  aria-label="打开菜单"
+                >
+                  <Menu size={20} className="text-[var(--text-soft)]" />
+                </button>
+                <div>
+                  <div className="nest-kicker">猫窝工作室</div>
+                  <div className="nest-title text-base font-semibold">{currentNav.label}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                {currentPage === "chat" && (
+                  <button
+                    onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
+                    className="nest-button-ghost flex h-9 w-9 items-center justify-center rounded-full"
+                  >
+                    {isRightPanelOpen ? (
+                      <PanelRightClose size={18} className="text-[var(--text-soft)]" />
+                    ) : (
+                      <PanelRightOpen size={18} className="text-[var(--text-soft)]" />
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="nest-button-ghost flex h-9 w-9 items-center justify-center rounded-full"
+                  aria-label="设置"
+                >
+                  <Settings size={18} className="text-[var(--text-soft)]" />
+                </button>
+                <ThemeToggle />
+              </div>
+            </div>
+          </header>
+
+          <div className="flex flex-1 overflow-hidden p-3 pt-2 lg:gap-4 lg:p-0">
+            <div className="nest-panel-strong nest-r-2xl relative flex-1 overflow-hidden">
+              {currentPage === "chat" && (
+                <ChatArea
+                  isRightPanelOpen={isRightPanelOpen}
+                  onToggleRightPanel={() => setIsRightPanelOpen(!isRightPanelOpen)}
+                />
+              )}
+              {currentPage === "signals" && <SignalInboxPage />}
+              {currentPage === "mission" && (
+                <MissionHubPage
+                  onOpenThread={(threadId) => {
+                    useThreadStore.getState().selectThread(threadId);
+                    setCurrentPage("chat");
+                  }}
+                />
+              )}
+              {currentPage === "workspace" && <WorkspacePanel />}
+            </div>
+
+            {currentPage === "chat" && isRightPanelOpen && (
+              <RightStatusPanel
+                threadId={currentThreadId}
+                isOpen={isRightPanelOpen}
+                onClose={() => setIsRightPanelOpen(false)}
               />
             )}
-            {currentPage === "signals" && <SignalInboxPage />}
-            {currentPage === "mission" && <MissionHubPage />}
-            {currentPage === "workspace" && <WorkspacePanel />}
           </div>
+        </main>
 
-          {/* Right panel (chat only) */}
-          {currentPage === "chat" && isRightPanelOpen && (
-            <RightStatusPanel
-              threadId={null}
-              isOpen={isRightPanelOpen}
-              onClose={() => setIsRightPanelOpen(false)}
-            />
-          )}
-        </div>
-      </main>
-
-      <HealthGuard />
-      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+        <HealthGuard />
+        <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      </div>
     </div>
   );
 }

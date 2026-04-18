@@ -13,13 +13,16 @@ import type {
   EnvVarListResponse,
   AccountListResponse,
   AccountResponse,
+  CatMetricsRow,
   TestKeyResponse,
   CapabilityBoardResponse,
   CapabilityPatchRequest,
   Attachment,
+  MetricsLeaderboardEntry,
   AuthUserResponse,
   TokenResponse,
 } from "../types";
+import { buildApiUrl } from "./runtimeConfig";
 
 // Mission types
 export type TaskStatus = "backlog" | "todo" | "doing" | "blocked" | "done";
@@ -36,6 +39,14 @@ export interface MissionTask {
   createdAt: string;
   dueDate?: string;
   progress?: number;
+  thread_ids?: string[];
+  workflow_id?: string;
+  session_ids?: string[];
+  pr_url?: string;
+  branch?: string;
+  commit_hash?: string;
+  worktree_path?: string;
+  last_activity_at?: number;
 }
 
 export interface TaskStats {
@@ -46,6 +57,47 @@ export interface TaskStats {
   blocked: number;
   done: number;
   by_priority: Record<string, number>;
+}
+
+export interface ThreadTaskEntry {
+  id: string;
+  title: string;
+  status: "todo" | "doing" | "blocked" | "done";
+  ownerCat?: string;
+  description?: string;
+  threadId?: string;
+  createdAt: string;
+}
+
+export interface QueueEntry {
+  id: string;
+  content: string;
+  targetCats: string[];
+  status: "queued" | "processing" | "paused";
+  createdAt: string;
+  threadId?: string;
+}
+
+export interface TokenUsageSnapshot {
+  promptTokens: number;
+  completionTokens: number;
+  cacheHitRate: number;
+  totalCost: number;
+}
+
+export interface GovernanceFinding {
+  rule: string;
+  severity: string;
+  message: string;
+}
+
+export interface GovernanceProject {
+  project_path: string;
+  status: "healthy" | "stale" | "missing" | "never-synced" | "error";
+  pack_version: string | null;
+  last_synced_at: string | null;
+  findings: GovernanceFinding[];
+  confirmed: boolean;
 }
 
 // Workspace types
@@ -101,6 +153,34 @@ export interface TerminalResult {
   returncode: number;
 }
 
+export interface TerminalJob {
+  id: string;
+  worktree_id: string;
+  command: string;
+  status: string;
+  returncode: number | null;
+  stdout_tail: string[];
+  stderr_tail: string[];
+  stdout_line_count: number;
+  stderr_line_count: number;
+  created_at: number;
+  updated_at: number;
+  elapsed_ms: number;
+}
+
+export type TerminalJobEvent =
+  | { type: "status"; status: string; command: string }
+  | { type: "started"; command: string }
+  | { type: "stdout"; text: string }
+  | { type: "stderr"; text: string }
+  | { type: "progress"; parser: string; stage?: string; percent?: number; detail: string }
+  | { type: "waiting_input"; text: string }
+  | { type: "heartbeat"; elapsed_since_output_ms: number; state: string }
+  | { type: "exited"; returncode: number; status: string }
+  | { type: "timeout"; status: string }
+  | { type: "error"; message: string }
+  | { type: "heartbeat"; silent: true };
+
 // Workflow types
 export interface WorkflowTemplate {
   id: string;
@@ -114,7 +194,15 @@ export interface ActiveWorkflow {
   status?: string;
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export class ApiError extends Error {
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 function getToken(): string | null {
   return localStorage.getItem("meowai:token");
@@ -138,13 +226,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     });
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(buildApiUrl(path), {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new ApiError("无法连接到服务，请确认前后端地址和服务状态");
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || body.error || `HTTP ${res.status}`);
+    throw new ApiError(body.detail || body.error || `HTTP ${res.status}`, res.status);
   }
   return res.json();
 }
@@ -167,12 +261,6 @@ export const api = {
         body: JSON.stringify({ name }),
       }),
 
-    switchCat: (id: string, catId: string) =>
-      request<ThreadDetailResponse>(`/api/threads/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ current_cat_id: catId }),
-      }),
-
     delete: (id: string) => request<{ status: string }>(`/api/threads/${id}`, { method: "DELETE" }),
 
     archive: (id: string) =>
@@ -181,14 +269,28 @@ export const api = {
       }),
 
     sessions: (id: string) =>
-      request<Array<{
-        session_id: string;
-        cat_id: string;
-        cat_name: string;
-        status: "active" | "sealed";
-        created_at: number;
-        consecutive_restore_failures: number;
-      }>>(`/api/threads/${id}/sessions`),
+      request<
+        Array<{
+          session_id: string;
+          cat_id: string;
+          cat_name: string;
+          status: "active" | "sealed";
+          created_at: number;
+          consecutive_restore_failures: number;
+          message_count: number;
+          tokens_used: number;
+          latency_ms: number;
+          turn_count: number;
+          cli_command: string;
+          default_model: string;
+          prompt_tokens: number;
+          completion_tokens: number;
+          cache_read_tokens: number;
+          cache_creation_tokens: number;
+          budget_max_prompt: number;
+          budget_max_context: number;
+        }>
+      >(`/api/threads/${id}/sessions`),
   },
 
   sessions: {
@@ -200,6 +302,18 @@ export const api = {
         status: "active" | "sealed";
         created_at: number;
         consecutive_restore_failures: number;
+        message_count: number;
+        tokens_used: number;
+        latency_ms: number;
+        turn_count: number;
+        cli_command: string;
+        default_model: string;
+        prompt_tokens: number;
+        completion_tokens: number;
+        cache_read_tokens: number;
+        cache_creation_tokens: number;
+        budget_max_prompt: number;
+        budget_max_context: number;
       }>(`/api/sessions/${sessionId}`),
     seal: (sessionId: string) =>
       request<{ success: boolean; session_id: string; status: string; message: string }>(
@@ -242,9 +356,9 @@ export const api = {
       }),
 
     search: (query: string, limit = 20) =>
-      request<{ results: Array<{ threadId: string; messageId: string; content: string; timestamp: string }> }>(
-        `/api/messages/search?q=${encodeURIComponent(query)}&limit=${limit}`
-      ),
+      request<{
+        results: Array<{ threadId: string; messageId: string; content: string; timestamp: string }>;
+      }>(`/api/messages/search?q=${encodeURIComponent(query)}&limit=${limit}`),
   },
 
   uploads: {
@@ -280,16 +394,19 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    update: (id: string, data: {
-      name?: string;
-      displayName?: string;
-      provider?: string;
-      defaultModel?: string;
-      personality?: string;
-      mentionPatterns?: string[];
-      capabilities?: string[];
-      permissions?: string[];
-    }) =>
+    update: (
+      id: string,
+      data: {
+        name?: string;
+        displayName?: string;
+        provider?: string;
+        defaultModel?: string;
+        personality?: string;
+        mentionPatterns?: string[];
+        capabilities?: string[];
+        permissions?: string[];
+      }
+    ) =>
       request<CatDetailResponse>(`/api/cats/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
@@ -309,8 +426,7 @@ export const api = {
       }),
     getBindingStatus: (name: string) =>
       request<ConnectorBindingStatus>(`/api/connectors/${name}/binding-status`),
-    getQr: (name: string) =>
-      request<ConnectorQrResponse>(`/api/connectors/${name}/qr`),
+    getQr: (name: string) => request<ConnectorQrResponse>(`/api/connectors/${name}/qr`),
     bindCallback: (name: string, token: string, userName: string) =>
       request<{ success: boolean; name: string; bound: boolean; bound_user: string }>(
         `/api/connectors/${name}/bind-callback`,
@@ -343,54 +459,109 @@ export const api = {
     accounts: {
       list: () => request<AccountListResponse>("/api/config/accounts"),
       create: (data: {
-        id: string; displayName: string; protocol: string; authType: string;
-        baseUrl?: string; models?: string[]; apiKey?: string;
-      }) => request<AccountResponse>("/api/config/accounts", {
-        method: "POST", body: JSON.stringify(data),
-      }),
+        id: string;
+        displayName: string;
+        protocol: string;
+        authType: string;
+        baseUrl?: string;
+        models?: string[];
+        apiKey?: string;
+      }) =>
+        request<AccountResponse>("/api/config/accounts", {
+          method: "POST",
+          body: JSON.stringify(data),
+        }),
       get: (id: string) => request<AccountResponse>(`/api/config/accounts/${id}`),
       update: (id: string, data: Record<string, unknown>) =>
         request<AccountResponse>(`/api/config/accounts/${id}`, {
-          method: "PATCH", body: JSON.stringify(data),
+          method: "PATCH",
+          body: JSON.stringify(data),
         }),
-      delete: (id: string) => request<{ success: boolean }>(`/api/config/accounts/${id}`, {
-        method: "DELETE",
-      }),
+      delete: (id: string) =>
+        request<{ success: boolean }>(`/api/config/accounts/${id}`, {
+          method: "DELETE",
+        }),
       testKey: (accountId: string, apiKey: string, protocol: string, baseUrl?: string) =>
         request<TestKeyResponse>(`/api/config/accounts/${accountId}/test-key`, {
-          method: "POST", body: JSON.stringify({ apiKey, protocol, baseUrl }),
+          method: "POST",
+          body: JSON.stringify({ apiKey, protocol, baseUrl }),
         }),
       bindCat: (catId: string, accountRef: string) =>
         request<{ success: boolean }>("/api/config/accounts/bind-cat", {
-          method: "PATCH", body: JSON.stringify({ catId, accountRef }),
+          method: "PATCH",
+          body: JSON.stringify({ catId, accountRef }),
         }),
     },
   },
 
   metrics: {
+    tokenUsage: (threadId?: string) =>
+      request<TokenUsageSnapshot>(
+        `/api/metrics/token-usage${threadId ? `?threadId=${encodeURIComponent(threadId)}` : ""}`
+      ),
     cat: (catId: string, days?: number) =>
-      request<{ cat_id: string; days: number; data: any[] }>(`/api/metrics/cats?cat_id=${catId}&days=${days ?? 7}`),
+      request<{ cat_id: string; days: number; data: CatMetricsRow[] }>(
+        `/api/metrics/cats?cat_id=${catId}&days=${days ?? 7}`
+      ),
     leaderboard: (days?: number) =>
-      request<{ days: number; leaderboard: any[] }>(`/api/metrics/leaderboard?days=${days ?? 7}`),
+      request<{ days: number; leaderboard: MetricsLeaderboardEntry[] }>(
+        `/api/metrics/leaderboard?days=${days ?? 7}`
+      ),
+  },
+
+  tasks: {
+    entries: (threadId?: string) =>
+      request<ThreadTaskEntry[]>(
+        `/api/tasks/entries${threadId ? `?threadId=${encodeURIComponent(threadId)}` : ""}`
+      ),
+  },
+
+  queue: {
+    entries: (threadId?: string) =>
+      request<QueueEntry[]>(
+        `/api/queue/entries${threadId ? `?threadId=${encodeURIComponent(threadId)}` : ""}`
+      ),
   },
 
   governance: {
-    listProjects: () => request<{ projects: any[] }>("/api/governance/projects"),
-    addProject: (data: { project_path: string; status?: string; version?: string; findings?: any[]; confirmed?: boolean }) =>
-      request<{ success: boolean }>("/api/governance/projects", { method: "POST", body: JSON.stringify(data) }),
+    listProjects: () => request<{ projects: GovernanceProject[] }>("/api/governance/projects"),
+    addProject: (data: {
+      project_path: string;
+      status?: string;
+      version?: string;
+      findings?: GovernanceFinding[];
+      confirmed?: boolean;
+    }) =>
+      request<{ success: boolean }>("/api/governance/projects", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     deleteProject: (projectPath: string) =>
-      request<{ success: boolean }>(`/api/governance/projects/${encodeURIComponent(projectPath)}`, { method: "DELETE" }),
+      request<{ success: boolean }>(`/api/governance/projects/${encodeURIComponent(projectPath)}`, {
+        method: "DELETE",
+      }),
     confirmProject: (projectPath: string) =>
-      request<{ success: boolean }>("/api/governance/confirm", { method: "POST", body: JSON.stringify({ project_path: projectPath }) }),
+      request<{ success: boolean }>("/api/governance/confirm", {
+        method: "POST",
+        body: JSON.stringify({ project_path: projectPath }),
+      }),
     syncProject: (projectPath: string) =>
-      request<{ success: boolean }>("/api/governance/sync", { method: "POST", body: JSON.stringify({ project_path: projectPath }) }),
+      request<{ success: boolean }>("/api/governance/sync", {
+        method: "POST",
+        body: JSON.stringify({ project_path: projectPath }),
+      }),
   },
 
   capabilities: {
     get: (projectPath: string, probe?: boolean) =>
-      request<CapabilityBoardResponse>(`/api/capabilities?project_path=${encodeURIComponent(projectPath)}${probe ? "&probe=true" : ""}`),
+      request<CapabilityBoardResponse>(
+        `/api/capabilities?project_path=${encodeURIComponent(projectPath)}${probe ? "&probe=true" : ""}`
+      ),
     patch: (data: CapabilityPatchRequest) =>
-      request<{ ok: boolean; capability: any }>("/api/capabilities", { method: "PATCH", body: JSON.stringify(data) }),
+      request<{ ok: boolean; capability: unknown }>("/api/capabilities", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
   },
 
   auth: {
@@ -412,14 +583,22 @@ export const api = {
       request<{ tasks: MissionTask[]; total: number }>(
         `/api/missions/tasks${priority && priority !== "all" ? `?priority=${priority}` : ""}`
       ),
+    getTask: (taskId: string) => request<MissionTask>(`/api/missions/tasks/${taskId}`),
     createTask: (task: Omit<MissionTask, "id" | "createdAt">) =>
       request<MissionTask>("/api/missions/tasks", { method: "POST", body: JSON.stringify(task) }),
     updateTask: (taskId: string, updates: Partial<Omit<MissionTask, "id">>) =>
-      request<MissionTask>(`/api/missions/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(updates) }),
-    updateTaskStatus: (taskId: string, status: TaskStatus) =>
-      request<{ success: boolean; id: string; status: string }>(`/api/missions/tasks/${taskId}/status`, {
-        method: "POST", body: JSON.stringify({ status }),
+      request<MissionTask>(`/api/missions/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
       }),
+    updateTaskStatus: (taskId: string, status: TaskStatus) =>
+      request<{ success: boolean; id: string; status: string }>(
+        `/api/missions/tasks/${taskId}/status`,
+        {
+          method: "POST",
+          body: JSON.stringify({ status }),
+        }
+      ),
     deleteTask: (taskId: string) =>
       request<{ success: boolean }>(`/api/missions/tasks/${taskId}`, { method: "DELETE" }),
     getStats: () => request<TaskStats>("/api/missions/stats"),
@@ -428,9 +607,13 @@ export const api = {
   workspace: {
     listWorktrees: () => request<{ worktrees: WorktreeEntry[] }>("/api/workspace/worktrees"),
     getTree: (worktreeId: string, path?: string, depth = 3) =>
-      request<{ tree: TreeNode[] }>(`/api/workspace/tree?worktreeId=${worktreeId}&depth=${depth}${path ? `&path=${encodeURIComponent(path)}` : ""}`),
+      request<{ tree: TreeNode[] }>(
+        `/api/workspace/tree?worktreeId=${worktreeId}&depth=${depth}${path ? `&path=${encodeURIComponent(path)}` : ""}`
+      ),
     getFile: (worktreeId: string, path: string) =>
-      request<FileData>(`/api/workspace/file?worktreeId=${worktreeId}&path=${encodeURIComponent(path)}`),
+      request<FileData>(
+        `/api/workspace/file?worktreeId=${worktreeId}&path=${encodeURIComponent(path)}`
+      ),
     search: (worktreeId: string, query: string, type: "content" | "filename" | "all" = "content") =>
       request<{ results: SearchResult[] }>("/api/workspace/search", {
         method: "POST",
@@ -441,15 +624,80 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ worktreeId, command }),
       }),
+    createTerminalJob: (worktreeId: string, command: string) =>
+      request<{ job_id: string; status: string }>("/api/workspace/terminal/jobs", {
+        method: "POST",
+        body: JSON.stringify({ worktreeId, command }),
+      }),
+    getTerminalJob: (jobId: string) =>
+      request<TerminalJob>(`/api/workspace/terminal/jobs/${jobId}`),
+    cancelTerminalJob: (jobId: string) =>
+      request<{ success: boolean; status: string }>(
+        `/api/workspace/terminal/jobs/${jobId}/cancel`,
+        {
+          method: "POST",
+        }
+      ),
+    streamTerminalJob: (
+      jobId: string,
+      onEvent: (event: TerminalJobEvent) => void,
+      onError?: () => void
+    ) => {
+      const token = getToken();
+      const url = buildApiUrl(`/api/workspace/terminal/jobs/${jobId}/stream`);
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const abortController = new AbortController();
+
+      fetch(url, { headers, signal: abortController.signal })
+        .then(async (res) => {
+          if (!res.body) return;
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+            let eventData = "";
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                eventData = line.slice(6);
+              } else if (line === "" && eventData) {
+                try {
+                  const data = JSON.parse(eventData) as TerminalJobEvent;
+                  onEvent(data);
+                } catch {
+                  // ignore malformed events
+                }
+                eventData = "";
+              }
+            }
+          }
+        })
+        .catch(() => {
+          onError?.();
+        });
+
+      return abortController;
+    },
     gitStatus: (worktreeId: string) =>
       request<GitStatus>(`/api/workspace/git-status?worktreeId=${worktreeId}`),
     gitDiff: (worktreeId: string, path?: string) =>
-      request<{ diff: string }>(`/api/workspace/git-diff?worktreeId=${worktreeId}${path ? `&path=${encodeURIComponent(path)}` : ""}`),
+      request<{ diff: string }>(
+        `/api/workspace/git-diff?worktreeId=${worktreeId}${path ? `&path=${encodeURIComponent(path)}` : ""}`
+      ),
     reveal: (worktreeId: string, path: string) =>
       request<{ success: boolean }>("/api/workspace/reveal", {
         method: "POST",
         body: JSON.stringify({ worktreeId, path }),
       }),
+    pickDirectory: () => request<{ path: string }>("/api/workspace/pick-directory"),
   },
 
   workflow: {
@@ -470,14 +718,19 @@ export const api = {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const res = await fetch(`${BASE_URL}/api/voice/tts`, {
-        method: "POST",
-        body: formData,
-        headers,
-      });
+      let res: Response;
+      try {
+        res = await fetch(buildApiUrl("/api/voice/tts"), {
+          method: "POST",
+          body: formData,
+          headers,
+        });
+      } catch {
+        throw new ApiError("无法连接到服务，请确认前后端地址和服务状态");
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || body.error || `HTTP ${res.status}`);
+        throw new ApiError(body.detail || body.error || `HTTP ${res.status}`, res.status);
       }
       return res.blob();
     },
