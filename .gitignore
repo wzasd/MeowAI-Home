@@ -40,3 +40,17 @@ memory/
 *.swp
 *.swo
 .worktrees/
+
+# Cat session runtime data
+.cat-cafe/
+.claude/
+.codex/
+.gemini/
+.kimi/
+.neowai/
+
+# Logs & temp
+*.log
+backend.log
+debug_responses.py
+.mcp.json

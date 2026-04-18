@@ -46,6 +46,16 @@ class MessageStore(ABC):
         pass
 
     @abstractmethod
+    async def delete_message(self, thread_id: str, message_id: str) -> bool:
+        """删除消息"""
+        pass
+
+    @abstractmethod
+    async def update_message(self, thread_id: str, message_id: str, content: str) -> bool:
+        """更新消息内容"""
+        pass
+
+    @abstractmethod
     async def search_messages(self, thread_id: str, query: str) -> List[Message]:
         """搜索消息内容"""
         pass

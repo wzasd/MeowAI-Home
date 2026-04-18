@@ -166,8 +166,14 @@ function AssignModal({
   const [catId, setCatId] = useState("orange");
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-lg bg-white p-4 dark:bg-gray-800">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-lg bg-white p-4 dark:bg-gray-800"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
             分配审阅者 #{pr}

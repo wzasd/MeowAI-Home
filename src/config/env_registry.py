@@ -134,8 +134,8 @@ default_env_registry.register(
     name="MEOWAI_PORT",
     category="core",
     description="API 服务端口",
-    default="8000",
-    example="8000",
+    default="3004",
+    example="3004",
 )
 
 default_env_registry.register(

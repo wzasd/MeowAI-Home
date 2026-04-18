@@ -1,15 +1,29 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useCatStore } from "../../stores/catStore";
 import { api } from "../../api/client";
-import { TrendingUp, TrendingDown, Minus, Zap, Clock, MessageSquare, CheckCircle2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  Loader2,
+  MessageSquare,
+  Minus,
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
+import { SettingsSectionCard, SettingsSummaryGrid } from "./SettingsSectionCard";
+import {
+  buildQuotaMetricSnapshot,
+  buildQuotaSummaryCards,
+  type QuotaMetricSnapshot,
+} from "./settingsSummaryModels";
 
-interface CatMetrics {
-  catId: string;
-  totalInvocations: number;
-  successRate: number;
-  avgLatencyMs: number;
-  totalTokens: number;
-  trend: "up" | "down" | "stable";
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
 }
 
 const TrendIcon = ({ trend }: { trend: "up" | "down" | "stable" }) => {
@@ -20,118 +34,163 @@ const TrendIcon = ({ trend }: { trend: "up" | "down" | "stable" }) => {
 
 export function QuotaBoard() {
   const cats = useCatStore((s) => s.cats);
-  const [metrics, setMetrics] = useState<CatMetrics[]>([]);
+  const [metrics, setMetrics] = useState<QuotaMetricSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      setLoading(true);
-      try {
-        const results = await Promise.all(
-          cats.map(async (cat) => {
-            try {
-              const data = await api.metrics.cat(cat.id, 7);
-              const rows = data.data || [];
-              const totalInvocations = rows.length;
-              const totalTokens = rows.reduce((sum: number, r: any) => sum + (r.prompt_tokens || 0) + (r.completion_tokens || 0), 0);
-              const successRate = totalInvocations > 0
-                ? rows.filter((r: any) => r.success).length / totalInvocations
-                : 1;
-              const avgLatencyMs = totalInvocations > 0
-                ? Math.round(rows.reduce((sum: number, r: any) => sum + (r.duration_ms || 0), 0) / totalInvocations)
-                : 0;
-              const trend: "up" | "down" | "stable" = successRate > 0.95 ? "up" : successRate > 0.8 ? "stable" : "down";
-              return {
-                catId: cat.id,
-                totalInvocations,
-                successRate,
-                avgLatencyMs,
-                totalTokens,
-                trend,
-              };
-            } catch {
-              return {
-                catId: cat.id,
-                totalInvocations: 0,
-                successRate: 1,
-                avgLatencyMs: 0,
-                totalTokens: 0,
-                trend: "stable" as const,
-              };
-            }
-          })
-        );
-        setMetrics(results);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMetrics();
+  const fetchMetrics = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const results = await Promise.all(
+        cats.map(async (cat) => {
+          try {
+            const data = await api.metrics.cat(cat.id, 7);
+            return buildQuotaMetricSnapshot(cat.id, data.data || []);
+          } catch {
+            return buildQuotaMetricSnapshot(cat.id, []);
+          }
+        })
+      );
+      setMetrics(results);
+    } catch (error) {
+      setError(getErrorMessage(error, "加载配额观测数据失败"));
+    } finally {
+      setLoading(false);
+    }
   }, [cats]);
 
-  if (loading) {
-    return <div className="p-4 text-gray-400">加载中...</div>;
+  useEffect(() => {
+    fetchMetrics();
+  }, [fetchMetrics]);
+
+  if (loading && metrics.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+        <span className="ml-2 text-sm text-gray-500">加载配额观测中...</span>
+      </div>
+    );
   }
 
-  const totalTokens = metrics.reduce((sum, m) => sum + m.totalTokens, 0);
-  const totalInvocations = metrics.reduce((sum, m) => sum + m.totalInvocations, 0);
-  const avgSuccessRate = metrics.length > 0
-    ? metrics.reduce((sum, m) => sum + m.successRate, 0) / metrics.length
-    : 0;
+  const summaryCards = buildQuotaSummaryCards(metrics, cats.length);
+  const totalTokens = metrics.reduce((sum, metric) => sum + metric.totalTokens, 0);
+  const activeMetrics = metrics.filter((metric) => metric.totalInvocations > 0);
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-          <Zap size={18} className="text-blue-500" />
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-gray-200">{(totalTokens / 1000000).toFixed(1)}M</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">总 Token 消耗</p>
-        </div>
-        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-          <MessageSquare size={18} className="text-green-500" />
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-gray-200">{totalInvocations}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">总调用次数</p>
-        </div>
-        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-          <CheckCircle2 size={18} className="text-purple-500" />
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-gray-200">{(avgSuccessRate * 100).toFixed(1)}%</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">平均成功率</p>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <SettingsSummaryGrid items={summaryCards} />
 
-      <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">按猫咪分布</h4>
-        <div className="space-y-2">
-          {metrics.map((metric) => {
-            const cat = cats.find((c) => c.id === metric.catId);
-            return (
-              <div key={metric.catId} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                <span className="w-20 text-sm font-medium text-gray-800 dark:text-gray-200">{cat?.displayName || metric.catId}</span>
-                <div className="flex flex-1 items-center gap-4 text-xs">
-                  <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                    <Zap size={10} /> {(metric.totalTokens / 1000).toFixed(0)}k tokens
-                  </span>
-                  <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                    <MessageSquare size={10} /> {metric.totalInvocations} 次
-                  </span>
-                  <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                    <Clock size={10} /> {metric.avgLatencyMs}ms
-                  </span>
-                  <span className={`font-medium ${metric.successRate > 0.95 ? "text-green-600" : "text-amber-600"}`}>
-                    {(metric.successRate * 100).toFixed(0)}%
-                  </span>
-                  <TrendIcon trend={metric.trend} />
-                </div>
-                <div className="w-24">
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${totalTokens > 0 ? (metric.totalTokens / totalTokens) * 100 : 0}%` }} />
-                  </div>
-                </div>
+      <SettingsSectionCard
+        eyebrow="Observation Lens"
+        title="猫咪资源与配额观测"
+        description="这页是只读观测，不做任何配置写入。先看过去 7 天的资源消耗、成功率和响应延迟，再决定是否需要把能力或权限迁回设置主流程。"
+        actions={
+          <button
+            type="button"
+            onClick={fetchMetrics}
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-white/65 px-3 py-2 text-sm text-[var(--text-soft)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-strong)] dark:bg-white/[0.05]"
+          >
+            <RefreshCw size={14} />
+            刷新观测
+          </button>
+        }
+      >
+        <div className="space-y-4">
+          {error && (
+            <div className="rounded-[1rem] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-500 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400">
+              {error}
+            </div>
+          )}
+
+          <div className="rounded-[1.2rem] border border-[var(--border)] bg-white/55 px-4 py-3 text-sm leading-7 text-[var(--text-soft)] dark:bg-white/[0.03]">
+            当前窗口固定为最近 7
+            天。后续如果把这块正式迁出设置页，再考虑和右侧观察面板共用时间范围控制。
+          </div>
+
+          {activeMetrics.length === 0 ? (
+            <div className="rounded-[1.25rem] border border-dashed border-[var(--border)] bg-white/45 px-5 py-10 text-center dark:bg-white/[0.03]">
+              <p className="text-sm font-medium text-[var(--text-strong)]">
+                最近 7 天还没有调用记录
+              </p>
+              <p className="mt-2 text-sm leading-7 text-[var(--text-soft)]">
+                这页适合观察资源压力和异常趋势。当前没有可用样本，先去对话流里跑实际任务再回来判断。
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-[1.2rem] border border-[var(--border)] bg-white/55 p-4 dark:bg-white/[0.03]">
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-faint)]">
+                按猫咪分布
+              </h4>
+              <div className="space-y-3">
+                {metrics.map((metric) => {
+                  const cat = cats.find((candidate) => candidate.id === metric.catId);
+                  return (
+                    <div
+                      key={metric.catId}
+                      className="rounded-[1rem] border border-[var(--border)] bg-white/80 p-4 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.45)] dark:bg-white/[0.04]"
+                    >
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                        <div className="xl:w-32">
+                          <div className="text-sm font-medium text-[var(--text-strong)]">
+                            {cat?.displayName || metric.catId}
+                          </div>
+                          <div className="mt-1 flex items-center gap-1 text-xs text-[var(--text-faint)]">
+                            <TrendIcon trend={metric.trend} />
+                            <span>
+                              {metric.trend === "up" && "稳定"}
+                              {metric.trend === "stable" && "平稳"}
+                              {metric.trend === "down" && "需关注"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid flex-1 gap-3 text-xs text-[var(--text-soft)] md:grid-cols-4">
+                          <span className="inline-flex items-center gap-1">
+                            <Zap size={10} />
+                            {Math.round(metric.totalTokens / 1000)}k tokens
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <MessageSquare size={10} />
+                            {metric.totalInvocations} 次调用
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Clock size={10} />
+                            {metric.avgLatencyMs}ms
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 font-medium ${
+                              metric.successRate > 0.95
+                                ? "text-green-600 dark:text-green-400"
+                                : metric.successRate >= 0.9
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : "text-red-600 dark:text-red-400"
+                            }`}
+                          >
+                            <CheckCircle2 size={10} />
+                            {(metric.successRate * 100).toFixed(0)}%
+                          </span>
+                        </div>
+
+                        <div className="xl:w-32">
+                          <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                            <div
+                              className="h-full rounded-full bg-[var(--accent)]"
+                              style={{
+                                width: `${totalTokens > 0 ? (metric.totalTokens / totalTokens) * 100 : 0}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
-      </div>
+      </SettingsSectionCard>
     </div>
   );
 }

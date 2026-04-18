@@ -196,8 +196,14 @@ function CreateTaskModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-lg bg-white p-5 dark:bg-gray-800">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-lg bg-white p-5 dark:bg-gray-800"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">新建定时任务</h3>
           <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">

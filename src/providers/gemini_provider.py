@@ -46,4 +46,10 @@ class GeminiProvider(BaseProvider):
             ))
         elif event_type in ("done", "finish"):
             messages.append(AgentMessage(type=AgentMessageType.DONE, cat_id=self.cat_id))
+        else:
+            # Surface unknown/process events as status
+            raw = event.get("message") or event.get("text")
+            text = raw if isinstance(raw, str) else (str(raw) if raw is not None else "")
+            if text:
+                messages.append(AgentMessage(type=AgentMessageType.STATUS, content=text, cat_id=self.cat_id))
         return messages

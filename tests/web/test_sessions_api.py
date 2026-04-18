@@ -164,7 +164,7 @@ async def test_get_session(app_client_with_sessions):
     data = response.json()
     assert data["session_id"] == "session-1"
     assert data["cat_id"] == "orange"
-    assert data["status"] == "active"
+    assert data["status"] == "sealed"
     assert data["cat_name"] == "Orange"
 
 
@@ -181,21 +181,21 @@ async def test_seal_session(app_client_with_sessions):
     """Test POST /api/sessions/{session_id}/seal."""
     client = app_client_with_sessions
 
-    # Verify session is active
-    response = await client.get("/api/sessions/session-1")
+    # Verify latest session is active
+    response = await client.get("/api/sessions/session-2")
     assert response.json()["status"] == "active"
 
-    # Seal the session
-    response = await client.post("/api/sessions/session-1/seal")
+    # Seal the latest active session
+    response = await client.post("/api/sessions/session-2/seal")
     assert response.status_code == 200
 
     data = response.json()
     assert data["success"] is True
-    assert data["session_id"] == "session-1"
+    assert data["session_id"] == "session-2"
     assert data["status"] == "sealed"
 
     # Verify session is now sealed
-    response = await client.get("/api/sessions/session-1")
+    response = await client.get("/api/sessions/session-2")
     assert response.json()["status"] == "sealed"
 
 
@@ -204,10 +204,7 @@ async def test_seal_already_sealed_session(app_client_with_sessions):
     """Test sealing an already sealed session."""
     client = app_client_with_sessions
 
-    # Seal first
-    await client.post("/api/sessions/session-1/seal")
-
-    # Seal again
+    # session-1 is already sealed (auto-sealed when session-2 was created)
     response = await client.post("/api/sessions/session-1/seal")
     assert response.status_code == 200
     assert response.json()["message"] == "Session is already sealed"
@@ -226,10 +223,7 @@ async def test_unseal_session(app_client_with_sessions):
     """Test POST /api/sessions/{session_id}/unseal."""
     client = app_client_with_sessions
 
-    # First seal the session
-    await client.post("/api/sessions/session-1/seal")
-
-    # Now unseal it
+    # session-1 was auto-sealed when session-2 was created
     response = await client.post("/api/sessions/session-1/unseal")
     assert response.status_code == 200
 
@@ -248,7 +242,8 @@ async def test_unseal_already_active_session(app_client_with_sessions):
     """Test unsealing an already active session."""
     client = app_client_with_sessions
 
-    response = await client.post("/api/sessions/session-1/unseal")
+    # session-2 is the latest active session
+    response = await client.post("/api/sessions/session-2/unseal")
     assert response.status_code == 200
     assert response.json()["message"] == "Session is already active"
 

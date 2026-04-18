@@ -2,7 +2,24 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from src.web.routes.queue import router, _queue_entries
+from src.web.routes.queue import router, DEFAULT_DB_PATH
+
+
+@pytest.fixture(autouse=True)
+def clear_queue():
+    """Clear queue before each test."""
+    import asyncio
+    import aiosqlite
+
+    async def _clean():
+        db = await aiosqlite.connect(DEFAULT_DB_PATH)
+        await db.execute("DELETE FROM queue_entries")
+        await db.commit()
+        await db.close()
+
+    asyncio.run(_clean())
+    yield
+    asyncio.run(_clean())
 
 
 @pytest.fixture
@@ -12,14 +29,6 @@ def client():
     app = FastAPI()
     app.include_router(router, prefix="/api")
     return TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def clear_queue():
-    """Clear queue before each test."""
-    _queue_entries.clear()
-    yield
-    _queue_entries.clear()
 
 
 class TestListEntries:
@@ -126,7 +135,10 @@ class TestPauseEntry:
         response = client.post("/api/queue/entries/pause1/pause")
         assert response.status_code == 200
         assert response.json()["success"] is True
-        assert _queue_entries["pause1"].status == "paused"
+
+        # Verify via API
+        list_resp = client.get("/api/queue/entries")
+        assert list_resp.json()[0]["status"] == "paused"
 
     def test_pause_not_found(self, client):
         """Should return 404 for non-existent entry."""
@@ -151,7 +163,10 @@ class TestResumeEntry:
         response = client.post("/api/queue/entries/resume1/resume")
         assert response.status_code == 200
         assert response.json()["success"] is True
-        assert _queue_entries["resume1"].status == "queued"
+
+        # Verify via API
+        list_resp = client.get("/api/queue/entries")
+        assert list_resp.json()[0]["status"] == "queued"
 
     def test_resume_not_found(self, client):
         """Should return 404 for non-existent entry."""
@@ -176,9 +191,12 @@ class TestRemoveEntry:
         response = client.delete("/api/queue/entries/remove1")
         assert response.status_code == 200
         assert response.json()["success"] is True
-        assert "remove1" not in _queue_entries
+
+        # Verify via API
+        assert len(client.get("/api/queue/entries").json()) == 0
 
     def test_remove_not_found(self, client):
         """Should return 404 for non-existent entry."""
         response = client.delete("/api/queue/entries/nonexistent")
         assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()

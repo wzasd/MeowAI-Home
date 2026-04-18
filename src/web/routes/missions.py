@@ -3,8 +3,14 @@
 from datetime import datetime
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 import uuid
+
+from src.missions.store import MissionStore
+from src.thread import ThreadManager
+from src.thread.models import Message
+from src.web.dependencies import get_mission_store, get_thread_manager
+from src.web.routes.ws import manager as ws_manager
 
 router = APIRouter(prefix="/missions", tags=["missions"])
 
@@ -28,6 +34,14 @@ class MissionTask(BaseModel):
     createdAt: str = ""
     dueDate: Optional[str] = None
     progress: Optional[int] = Field(None, ge=0, le=100)
+    thread_ids: List[str] = Field(default_factory=list)
+    workflow_id: Optional[str] = None
+    session_ids: List[str] = Field(default_factory=list)
+    pr_url: Optional[str] = None
+    branch: Optional[str] = None
+    commit_hash: Optional[str] = None
+    worktree_path: Optional[str] = None
+    last_activity_at: Optional[float] = None
 
 
 class TaskCreateRequest(BaseModel):
@@ -76,119 +90,64 @@ class TaskStats(BaseModel):
     by_priority: Dict[str, int]
 
 
-# === In-memory storage (TODO: replace with database) ===
+async def _broadcast_task_update(thread_ids: List[str], task: Dict[str, object]) -> None:
+    """Broadcast task update via WebSocket to all bound threads."""
+    for tid in thread_ids:
+        await ws_manager.broadcast(
+            tid,
+            {
+                "type": "task_updated",
+                "task": task,
+            },
+        )
 
-_missions: Dict[str, MissionTask] = {}
+
+async def _push_system_message(
+    thread_id: str,
+    content: str,
+    tm: ThreadManager,
+) -> None:
+    """Push a system message to the bound thread."""
+    try:
+        msg = Message(role="assistant", content=content, cat_id="system")
+        await tm.add_message(thread_id, msg)
+        await ws_manager.broadcast(
+            thread_id,
+            {
+                "type": "message_sent",
+                "message": {
+                    "role": "assistant",
+                    "content": content,
+                    "cat_id": "system",
+                    "metadata": {"source": "mission_update"},
+                },
+            },
+        )
+    except Exception:
+        pass
 
 
-def _ensure_default_tasks():
-    """Ensure default tasks exist."""
-    if not _missions:
-        defaults = [
-            MissionTask(
-                id="m1",
-                title="实现消息编辑功能",
-                description="支持用户编辑已发送的消息",
-                status="doing",
-                priority="P0",
-                ownerCat="orange",
-                tags=["聊天", "核心"],
-                createdAt="2026-04-10",
-                progress=60,
-            ),
-            MissionTask(
-                id="m2",
-                title="添加 Signal 收件箱页面",
-                description="展示聚合文章，支持学习模式",
-                status="done",
-                priority="P1",
-                ownerCat="patch",
-                tags=["Signal"],
-                createdAt="2026-04-09",
-                progress=100,
-            ),
-            MissionTask(
-                id="m3",
-                title="富文本块组件",
-                description="Card, Diff, Checklist, Media blocks",
-                status="done",
-                priority="P1",
-                ownerCat="inky",
-                tags=["UI", "聊天"],
-                createdAt="2026-04-09",
-                progress=100,
-            ),
-            MissionTask(
-                id="m4",
-                title="右侧面板开发",
-                description="Token统计、Session链、任务面板、队列管理",
-                status="doing",
-                priority="P0",
-                ownerCat="inky",
-                tags=["UI", "面板"],
-                createdAt="2026-04-10",
-                progress=80,
-            ),
-            MissionTask(
-                id="m5",
-                title="Workspace IDE 面板",
-                description="文件树 + 代码查看器 + 终端",
-                status="backlog",
-                priority="P2",
-                tags=["Workspace", "IDE"],
-                createdAt="2026-04-11",
-            ),
-            MissionTask(
-                id="m6",
-                title="Split Pane 多线程视图",
-                description="2x2 分屏同时查看多个线程",
-                status="backlog",
-                priority="P2",
-                tags=["聊天", "UI"],
-                createdAt="2026-04-11",
-            ),
-            MissionTask(
-                id="m7",
-                title="语音输入输出",
-                description="Whisper API 集成 + TTS 流式播放",
-                status="backlog",
-                priority="P3",
-                tags=["语音"],
-                createdAt="2026-04-11",
-            ),
-            MissionTask(
-                id="m8",
-                title="消息分支功能",
-                description="从任意消息分支出新线程",
-                status="todo",
-                priority="P1",
-                ownerCat="orange",
-                tags=["聊天", "线程"],
-                createdAt="2026-04-10",
-            ),
-            MissionTask(
-                id="m9",
-                title="历史搜索模态框",
-                description="全文搜索历史对话",
-                status="done",
-                priority="P1",
-                tags=["搜索"],
-                createdAt="2026-04-10",
-                progress=100,
-            ),
-            MissionTask(
-                id="m10",
-                title="依赖图可视化",
-                description="DAGre + React Flow 任务依赖关系图",
-                status="blocked",
-                priority="P2",
-                tags=["Mission", "图表"],
-                createdAt="2026-04-10",
-                dueDate="2026-04-15",
-            ),
-        ]
-        for task in defaults:
-            _missions[task.id] = task
+def _task_from_dict(data: Dict[str, object]) -> MissionTask:
+    return MissionTask(
+        id=data.get("id", ""),
+        title=data["title"],
+        description=data.get("description", ""),
+        status=data.get("status", "backlog"),
+        priority=data.get("priority", "P2"),
+        ownerCat=data.get("ownerCat"),
+        tags=data.get("tags", []),
+        createdAt=data.get("createdAt", ""),
+        dueDate=data.get("dueDate"),
+        progress=data.get("progress"),
+        thread_ids=data.get("thread_ids", []),
+        workflow_id=data.get("workflow_id"),
+        session_ids=data.get("session_ids", []),
+        pr_url=data.get("pr_url"),
+        branch=data.get("branch"),
+        commit_hash=data.get("commit_hash"),
+        worktree_path=data.get("worktree_path"),
+        last_activity_at=data.get("last_activity_at"),
+    )
 
 
 # === API Endpoints ===
@@ -198,112 +157,168 @@ async def list_tasks(
     status: Optional[TaskStatus] = Query(None, description="Filter by status"),
     priority: Optional[Priority] = Query(None, description="Filter by priority"),
     tag: Optional[str] = Query(None, description="Filter by tag"),
+    store: MissionStore = Depends(get_mission_store),
 ) -> TasksResponse:
     """List all mission tasks with optional filtering."""
-    _ensure_default_tasks()
-
-    tasks = list(_missions.values())
-
-    if status:
-        tasks = [t for t in tasks if t.status == status]
-    if priority:
-        tasks = [t for t in tasks if t.priority == priority]
-    if tag:
-        tasks = [t for t in tasks if tag in t.tags]
-
+    rows = await store.list_tasks(status=status, priority=priority, tag=tag)
+    tasks = [_task_from_dict(r) for r in rows]
     return TasksResponse(tasks=tasks, total=len(tasks))
 
 
 @router.post("/tasks", response_model=MissionTask)
-async def create_task(request: TaskCreateRequest) -> MissionTask:
-    """Create a new mission task."""
-    _ensure_default_tasks()
+async def create_task(
+    request: TaskCreateRequest,
+    store: MissionStore = Depends(get_mission_store),
+    tm: ThreadManager = Depends(get_thread_manager),
+) -> MissionTask:
+    """Create a new mission task and auto-bind a dedicated thread."""
+    task_data = request.model_dump()
+    task_row = await store.create_task(task_data)
+    task_id = task_row["id"]
 
-    task = MissionTask(
-        id=str(uuid.uuid4())[:8],
-        title=request.title,
-        description=request.description,
-        status=request.status,
-        priority=request.priority,
-        ownerCat=request.ownerCat,
-        tags=request.tags,
-        createdAt=datetime.now().strftime("%Y-%m-%d"),
-        dueDate=request.dueDate,
-        progress=request.progress,
+    # Auto-create a dedicated thread for this task
+    thread = await tm.create(name=f"任务: {request.title}", current_cat_id="orange", project_path="")
+    thread.active_task_id = task_id
+    await tm.update_thread(thread)
+
+    # Update task with thread_ids
+    task_row = await store.update_task(task_id, {"thread_ids": [thread.id]})
+
+    # Push system message to thread
+    await _push_system_message(
+        thread.id,
+        f"【系统】任务「{request.title}」已创建，状态：{request.status}，优先级：{request.priority}。",
+        tm,
     )
-    _missions[task.id] = task
-    return task
+
+    return _task_from_dict(task_row)
 
 
 @router.get("/tasks/{task_id}", response_model=MissionTask)
-async def get_task(task_id: str) -> MissionTask:
+async def get_task(
+    task_id: str,
+    store: MissionStore = Depends(get_mission_store),
+) -> MissionTask:
     """Get a single task by ID."""
-    _ensure_default_tasks()
-
-    if task_id not in _missions:
+    row = await store.get_task(task_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Task not found")
-    return _missions[task_id]
+    return _task_from_dict(row)
 
 
 @router.patch("/tasks/{task_id}", response_model=MissionTask)
-async def update_task(task_id: str, request: TaskUpdateRequest) -> MissionTask:
-    """Update a task."""
-    _ensure_default_tasks()
-
-    if task_id not in _missions:
+async def update_task(
+    task_id: str,
+    request: TaskUpdateRequest,
+    store: MissionStore = Depends(get_mission_store),
+    tm: ThreadManager = Depends(get_thread_manager),
+) -> MissionTask:
+    """Update a task and notify bound thread."""
+    row = await store.get_task(task_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    task = _missions[task_id]
-    update_data = request.model_dump(exclude_unset=True)
+    updates = request.model_dump(exclude_unset=True)
+    if not updates:
+        return _task_from_dict(row)
 
-    for key, value in update_data.items():
-        setattr(task, key, value)
+    updated = await store.update_task(task_id, updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Task not found")
 
-    return task
+    # Build notification content for changed fields
+    changed_parts = []
+    for key, value in updates.items():
+        if key == "status":
+            changed_parts.append(f"状态 → {value}")
+        elif key == "priority":
+            changed_parts.append(f"优先级 → {value}")
+        elif key == "ownerCat":
+            changed_parts.append(f"负责人 → @{value}" if value else "负责人 → 未分配")
+        elif key == "progress":
+            changed_parts.append(f"进度 → {value}%")
+        elif key == "title":
+            changed_parts.append(f"标题 → {value}")
+
+    thread_ids = updated.get("thread_ids", [])
+    if thread_ids and changed_parts:
+        content = f"【系统】任务更新：{', '.join(changed_parts)}"
+        for tid in thread_ids:
+            await _push_system_message(tid, content, tm)
+        await _broadcast_task_update(thread_ids, updated)
+
+    return _task_from_dict(updated)
 
 
 @router.post("/tasks/{task_id}/status")
-async def update_task_status(task_id: str, update: TaskStatusUpdate) -> dict:
-    """Update task status."""
-    _ensure_default_tasks()
-
-    if task_id not in _missions:
+async def update_task_status(
+    task_id: str,
+    update: TaskStatusUpdate,
+    store: MissionStore = Depends(get_mission_store),
+    tm: ThreadManager = Depends(get_thread_manager),
+) -> dict:
+    """Update task status and notify bound thread."""
+    row = await store.get_task(task_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    _missions[task_id].status = update.status
+    updated = await store.update_task(task_id, {"status": update.status})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    thread_ids = updated.get("thread_ids", [])
+    if thread_ids:
+        content = f"【系统】任务状态变更为：{update.status}"
+        for tid in thread_ids:
+            await _push_system_message(tid, content, tm)
+        await _broadcast_task_update(thread_ids, updated)
+
     return {"success": True, "id": task_id, "status": update.status}
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str) -> dict:
-    """Delete a task."""
-    _ensure_default_tasks()
-
-    if task_id not in _missions:
+async def delete_task(
+    task_id: str,
+    store: MissionStore = Depends(get_mission_store),
+    tm: ThreadManager = Depends(get_thread_manager),
+) -> dict:
+    """Delete a task and notify bound thread."""
+    row = await store.get_task(task_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    del _missions[task_id]
-    return {"success": True}
+    thread_ids = row.get("thread_ids", [])
+    success = await store.delete_task(task_id)
+
+    for tid in thread_ids:
+        await _push_system_message(tid, "【系统】该任务已被删除。", tm)
+        await ws_manager.broadcast(
+            tid,
+            {"type": "task_deleted", "task_id": task_id},
+        )
+
+    return {"success": success}
 
 
 @router.get("/stats", response_model=TaskStats)
-async def get_stats() -> TaskStats:
+async def get_stats(
+    store: MissionStore = Depends(get_mission_store),
+) -> TaskStats:
     """Get task statistics."""
-    _ensure_default_tasks()
-
-    tasks = list(_missions.values())
+    tasks = await store.list_tasks()
     by_priority = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
 
     for t in tasks:
-        if t.priority in by_priority:
-            by_priority[t.priority] += 1
+        p = t.get("priority")
+        if p in by_priority:
+            by_priority[p] += 1
 
     return TaskStats(
         total=len(tasks),
-        backlog=sum(1 for t in tasks if t.status == "backlog"),
-        todo=sum(1 for t in tasks if t.status == "todo"),
-        doing=sum(1 for t in tasks if t.status == "doing"),
-        blocked=sum(1 for t in tasks if t.status == "blocked"),
-        done=sum(1 for t in tasks if t.status == "done"),
+        backlog=sum(1 for t in tasks if t.get("status") == "backlog"),
+        todo=sum(1 for t in tasks if t.get("status") == "todo"),
+        doing=sum(1 for t in tasks if t.get("status") == "doing"),
+        blocked=sum(1 for t in tasks if t.get("status") == "blocked"),
+        done=sum(1 for t in tasks if t.get("status") == "done"),
         by_priority=by_priority,
     )

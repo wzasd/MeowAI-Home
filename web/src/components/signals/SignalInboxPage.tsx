@@ -25,6 +25,8 @@ import {
   type ArticleStatus,
   type ArticleTier,
 } from "../../hooks/useSignals";
+import { PageHeader } from "../ui/PageHeader";
+import { SlidingNav } from "../ui/SlidingNav";
 
 const TIER_COLORS: Record<ArticleTier, string> = {
   S: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -42,7 +44,11 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function TierBadge({ tier }: { tier: ArticleTier }) {
-  return <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${TIER_COLORS[tier]}`}>{tier}</span>;
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${TIER_COLORS[tier]}`}>
+      {tier}
+    </span>
+  );
 }
 
 function ArticleList({
@@ -88,15 +94,21 @@ function ArticleList({
           <div className="flex items-start gap-2">
             <TierBadge tier={article.tier} />
             <div className="min-w-0 flex-1">
-              <h4 className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{article.title}</h4>
-              <p className="mt-0.5 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">{article.summary}</p>
+              <h4 className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">
+                {article.title}
+              </h4>
+              <p className="mt-0.5 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
+                {article.summary}
+              </p>
               <div className="mt-1 flex items-center gap-2 text-[10px] text-gray-400">
                 <span>{article.source}</span>
                 <span>{article.publishedAt?.slice(5, 10) || "—"}</span>
                 {article.readTime && <span>{article.readTime}分钟</span>}
               </div>
             </div>
-            {article.status === "starred" && <Star size={14} className="shrink-0 text-amber-500" fill="currentColor" />}
+            {article.status === "starred" && (
+              <Star size={14} className="shrink-0 text-amber-500" fill="currentColor" />
+            )}
           </div>
         </button>
       ))}
@@ -199,7 +211,9 @@ function ArticleDetail({
             <TierBadge tier={article.tier} />
             <span className="text-xs text-gray-400">{article.source}</span>
           </div>
-          <h2 className="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">{article.title}</h2>
+          <h2 className="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">
+            {article.title}
+          </h2>
           <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
             <span className="flex items-center gap-1">
               <Clock size={12} /> {article.publishedAt?.slice(0, 10) || "—"}
@@ -218,7 +232,11 @@ function ArticleDetail({
             }`}
             title="收藏"
           >
-            {isStarring ? <Loader2 size={16} className="animate-spin" /> : <Star size={16} fill={article.status === "starred" ? "currentColor" : "none"} />}
+            {isStarring ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Star size={16} fill={article.status === "starred" ? "currentColor" : "none"} />
+            )}
           </button>
           <a
             href={article.url}
@@ -241,14 +259,20 @@ function ArticleDetail({
             disabled={isMarkingRead}
             className="ml-auto flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {isMarkingRead ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+            {isMarkingRead ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <CheckCircle size={12} />
+            )}
             标记已读
           </button>
         </div>
       )}
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">{article.summary}</p>
+        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+          {article.summary}
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-1">
@@ -283,7 +307,11 @@ function ArticleDetail({
                   disabled={isSavingNotes}
                   className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-[10px] text-white hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {isSavingNotes ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                  {isSavingNotes ? (
+                    <Loader2 size={10} className="animate-spin" />
+                  ) : (
+                    <Save size={10} />
+                  )}
                   保存
                 </button>
               </div>
@@ -303,7 +331,11 @@ function ArticleDetail({
                 disabled={isGeneratingPodcast}
                 className="flex items-center gap-1 rounded bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700 disabled:opacity-50"
               >
-                {isGeneratingPodcast ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                {isGeneratingPodcast ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Play size={12} />
+                )}
                 生成播客
               </button>
               <button
@@ -311,7 +343,11 @@ function ArticleDetail({
                 disabled={isGeneratingResearch}
                 className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {isGeneratingResearch ? <Loader2 size={12} className="animate-spin" /> : <MessageSquare size={12} />}
+                {isGeneratingResearch ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <MessageSquare size={12} />
+                )}
                 讨论（多猫研报）
               </button>
             </div>
@@ -319,7 +355,9 @@ function ArticleDetail({
             {/* Podcast player */}
             {podcastUrl && (
               <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
-                <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">播客预览</p>
+                <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                  播客预览
+                </p>
                 <audio src={podcastUrl} controls className="w-full" />
               </div>
             )}
@@ -327,7 +365,9 @@ function ArticleDetail({
             {/* Research report */}
             {researchReport && (
               <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
-                <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">多猫研究报告</p>
+                <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                  多猫研究报告
+                </p>
                 <div className="max-h-64 overflow-y-auto whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
                   {researchReport}
                 </div>
@@ -371,10 +411,14 @@ function SourcesView({
           key={source.id}
           className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
         >
-          <div className={`h-3 w-3 rounded-full ${source.enabled ? "bg-green-500" : "bg-gray-400"}`} />
+          <div
+            className={`h-3 w-3 rounded-full ${source.enabled ? "bg-green-500" : "bg-gray-400"}`}
+          />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{source.name}</span>
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                {source.name}
+              </span>
               <TierBadge tier={source.tier} />
             </div>
             <div className="mt-0.5 flex items-center gap-2 text-[10px] text-gray-400">
@@ -389,7 +433,11 @@ function SourcesView({
             className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-500 disabled:opacity-50 dark:hover:bg-gray-700"
             title="刷新"
           >
-            {refreshingId === source.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            {refreshingId === source.id ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <RefreshCw size={14} />
+            )}
           </button>
         </div>
       ))}
@@ -458,48 +506,40 @@ export function SignalInboxPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Signal 收件箱</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing || loading}
-              className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {isRefreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-              刷新
-            </button>
-          </div>
-        </div>
-        {/* Tabs */}
-        <div className="mt-2 flex gap-1">
+      <PageHeader
+        eyebrow="收件箱"
+        title="Signal 收件箱"
+        description="把新信号、来源状态和研究入口放在同一层里看，不让重要线索埋进列表。"
+        actions={
           <button
-            onClick={() => setTab("inbox")}
-            className={`rounded px-3 py-1 text-xs font-medium ${
-              tab === "inbox"
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            onClick={handleRefresh}
+            disabled={isRefreshing || loading}
+            className="nest-button-secondary flex items-center gap-1 px-4 py-2 text-xs font-semibold disabled:opacity-50"
           >
-            收件箱
+            {isRefreshing ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+            刷新
           </button>
-          <button
-            onClick={() => setTab("sources")}
-            className={`rounded px-3 py-1 text-xs font-medium ${
-              tab === "sources"
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
-          >
-            来源管理
-          </button>
+        }
+      >
+        <div className="w-full max-w-[15rem]">
+          <SlidingNav
+            items={[
+              { key: "inbox", label: "收件箱" },
+              { key: "sources", label: "来源管理" },
+            ]}
+            activeKey={tab}
+            onChange={(key) => setTab(key as "inbox" | "sources")}
+            className="nest-nav-strip-compact"
+          />
         </div>
-      </div>
+      </PageHeader>
 
       {error && (
-        <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400 lg:mx-6">
           <AlertCircle size={14} />
           {error}
         </div>
@@ -517,7 +557,10 @@ export function SignalInboxPage() {
             <div className="border-b border-gray-200 p-2 dark:border-gray-700">
               <form onSubmit={handleSearch} className="flex items-center gap-1">
                 <div className="relative flex-1">
-                  <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Search
+                    size={14}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
                   <input
                     className="w-full rounded border border-gray-200 bg-white py-1 pl-7 pr-2 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                     placeholder="搜索文章..."
@@ -543,7 +586,12 @@ export function SignalInboxPage() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
-              <ArticleList articles={articles} selectedId={selectedId} onSelect={handleSelect} loading={loading} />
+              <ArticleList
+                articles={articles}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+                loading={loading}
+              />
             </div>
           </div>
 

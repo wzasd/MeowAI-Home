@@ -10,8 +10,8 @@ import { IntentBadge } from "./IntentBadge";
 import { ThinkingPanel } from "./ThinkingPanel";
 import { SessionStatus } from "../session/SessionStatus";
 import { ExportButton } from "./ExportButton";
-import { CatSelector } from "../cat/CatSelector";
 import { HistorySearchModal } from "./HistorySearchModal";
+import { PageHeader } from "../ui/PageHeader";
 import type { MessageResponse } from "../../types";
 import { formatDateTime } from "../../types";
 import { PanelRightOpen, PanelRightClose } from "lucide-react";
@@ -27,6 +27,7 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
   const isStreaming = useChatStore((s) => s.isStreaming);
   const streamingResponses = useChatStore((s) => s.streamingResponses);
   const streamingThinking = useChatStore((s) => s.streamingThinking);
+  const streamingStatuses = useChatStore((s) => s.streamingStatuses);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
@@ -34,9 +35,11 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
   const replyingTo = useChatStore((s) => s.replyingTo);
   const activeSkill = useChatStore((s) => s.activeSkill);
   const intentMode = useChatStore((s) => s.intentMode);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const previousThreadIdRef = useRef<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const projectName = currentThread?.project_path?.split("/").filter(Boolean).pop();
 
   // Fetch messages when thread changes
   useEffect(() => {
@@ -61,10 +64,18 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [setReplyingTo]);
 
-  // Auto-scroll on new messages
+  // Auto-scroll only inside the message pane, not the whole page.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingResponses]);
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const isThreadSwitch = previousThreadIdRef.current !== currentThread?.id;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: isThreadSwitch ? "auto" : "smooth",
+    });
+    previousThreadIdRef.current = currentThread?.id ?? null;
+  }, [currentThread?.id, messages, streamingResponses]);
 
   // Message handlers
   const handleReply = (msg: MessageResponse) => {
@@ -106,144 +117,155 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
 
   if (!currentThread) {
     return (
-      <div className="flex h-full w-full items-center justify-center overflow-hidden text-gray-400 dark:text-gray-600">
-        <div className="text-center">
+      <div className="flex h-full w-full items-center justify-center overflow-hidden px-6 text-[var(--text-faint)]">
+        <div className="nest-card nest-r-xl max-w-lg p-10 text-center">
           <div className="mb-4 text-6xl">🐱</div>
-          <p className="text-lg dark:text-gray-400">选择或创建一个对话开始聊天</p>
+          <h2 className="nest-title text-2xl font-semibold text-[var(--text-strong)]">
+            今晚的猫窝还空着
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--text-soft)]">
+            选一个猫窝，或者搭一个新窝。消息、任务、文件和猫猫状态都会在这里汇流。
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex min-w-0 items-center gap-3">
-          <CatSelector
-            currentCatId={currentThread.current_cat_id}
-            onCatChange={async (catId) => {
-              try {
-                await api.threads.switchCat(currentThread.id, catId);
-                // Update local state
-                if (currentThread) {
-                  currentThread.current_cat_id = catId;
-                }
-              } catch (e) {
-                console.error("Failed to switch cat:", e);
-              }
-            }}
-          />
-          <h2 className="truncate text-sm font-semibold text-gray-800 dark:text-gray-100">
-            {currentThread.name}
-          </h2>
-          {intentMode && <IntentBadge mode={intentMode} />}
-          {activeSkill && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              {activeSkill}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <SessionStatus threadId={currentThread.id} />
-          <ExportButton />
-          <div className="hidden text-xs text-gray-400 dark:text-gray-500 sm:block">
-            创建于 {formatDateTime(currentThread.created_at)}
-          </div>
-          {onToggleRightPanel && (
-            <button
-              onClick={onToggleRightPanel}
-              className="ml-2 flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              title={isRightPanelOpen ? "关闭右侧面板" : "打开右侧面板"}
-            >
-              {isRightPanelOpen ? (
-                <PanelRightClose size={16} className="text-gray-600 dark:text-gray-400" />
-              ) : (
-                <PanelRightOpen size={16} className="text-gray-600 dark:text-gray-400" />
-              )}
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="flex h-full flex-col overflow-hidden bg-transparent">
+      <PageHeader
+        eyebrow="当前会话"
+        title={currentThread.name}
+        titleClassName="truncate"
+        description="在一张工作台里收住回复、思路、技能和任务流。"
+        meta={
+          <>
+            {projectName && <span className="nest-chip">{projectName}</span>}
+            {intentMode && <IntentBadge mode={intentMode} />}
+            {activeSkill && <span className="nest-chip">{activeSkill}</span>}
+          </>
+        }
+        actions={
+          <>
+            <div className="nest-chip">
+              <SessionStatus threadId={currentThread.id} />
+            </div>
+            <div className="nest-chip">
+              <ExportButton />
+            </div>
+            <div className="hidden text-xs text-[var(--text-faint)] sm:block">
+              创建于 {formatDateTime(currentThread.created_at)}
+            </div>
+            {onToggleRightPanel && (
+              <button
+                onClick={onToggleRightPanel}
+                className="nest-button-secondary flex h-10 items-center justify-center rounded-full px-3"
+                title={isRightPanelOpen ? "关闭右侧面板" : "打开右侧面板"}
+              >
+                {isRightPanelOpen ? (
+                  <PanelRightClose size={16} className="text-[var(--text-soft)]" />
+                ) : (
+                  <PanelRightOpen size={16} className="text-[var(--text-soft)]" />
+                )}
+                {!isRightPanelOpen && (
+                  <span className="text-xs text-[var(--text-soft)]">状态台</span>
+                )}
+              </button>
+            )}
+          </>
+        }
+      />
 
-      {/* Messages */}
-      <div className="flex-1 space-y-1 overflow-y-auto bg-gray-50/50 px-4 py-4 dark:bg-gray-900/50 lg:px-6">
-        {messages.length === 0 && !isStreaming && (
-          <div className="mt-20 text-center text-gray-400 dark:text-gray-500">
-            <p className="dark:text-gray-400">开始与猫猫对话吧！</p>
-            <p className="mt-1 text-sm">
-              输入{" "}
-              <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-700 dark:text-gray-300">
-                @dev
-              </code>{" "}
-              开发猫,{" "}
-              <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-700 dark:text-gray-300">
-                @review
-              </code>{" "}
-              审查猫,{" "}
-              <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-700 dark:text-gray-300">
-                @research
-              </code>{" "}
-              研究猫
-            </p>
-          </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <MessageBubble
-            key={i}
-            message={msg}
-            isEditing={editingId === msg.id}
-            onReply={() => handleReply(msg)}
-            onEdit={(content) => handleEdit(msg, content)}
-            onDelete={() => handleDelete(msg)}
-            onBranch={() => handleBranch(msg)}
-            onStartEdit={() => setEditingId(msg.id)}
-            onCancelEdit={() => setEditingId(null)}
-          />
-        ))}
-
-        {/* Streaming responses */}
-        {Array.from(streamingResponses.values()).map((resp) => (
-          <div key={resp.catId} className="mb-4 flex justify-start">
-            <AgentBadge catId={resp.catId} />
-            <div className="max-w-[70%]">
-              {/* Streaming thinking panel */}
-              {streamingThinking.get(resp.catId) && (
-                <ThinkingPanel
-                  content={streamingThinking.get(resp.catId)!}
-                  catId={resp.catId}
-                  catName={resp.catName}
-                />
-              )}
-              <div className="rounded-2xl border bg-white px-4 py-2 shadow-sm dark:border-gray-600 dark:bg-gray-800">
-                <p className="whitespace-pre-wrap text-gray-800 dark:text-gray-200">
-                  {resp.content}
-                </p>
-                <span className="animate-pulse text-gray-400 dark:text-gray-500">|</span>
+      <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-4 py-4 lg:px-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.12),transparent_20%)] dark:bg-[radial-gradient(circle_at_top,rgba(230,162,93,0.08),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_20%)]" />
+        <div className="relative space-y-1 pb-2">
+          {messages.length === 0 && !isStreaming && (
+            <div className="nest-card nest-r-xl mx-auto mt-10 max-w-2xl p-8 text-center">
+              <div className="nest-kicker">今晚的猫窝</div>
+              <h3 className="nest-title mt-3 text-2xl font-semibold text-[var(--text-strong)]">
+                先把第一句话放进来
+              </h3>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[var(--text-soft)]">
+                这里不是普通 IM，而是流浪猫工作室的共用桌面。提一个问题，或者直接点名：
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                <span className="nest-chip">@opus 架构</span>
+                <span className="nest-chip">@砚砚 Review</span>
+                <span className="nest-chip">@gemini 设计</span>
               </div>
             </div>
-          </div>
-        ))}
+          )}
 
-        <div ref={messagesEndRef} />
+          {messages.map((msg, i) => (
+            <MessageBubble
+              key={i}
+              message={msg}
+              isEditing={editingId === msg.id}
+              onReply={() => handleReply(msg)}
+              onEdit={(content) => handleEdit(msg, content)}
+              onDelete={() => handleDelete(msg)}
+              onBranch={() => handleBranch(msg)}
+              onStartEdit={() => setEditingId(msg.id)}
+              onCancelEdit={() => setEditingId(null)}
+            />
+          ))}
+
+          {Array.from(streamingResponses.values()).map((resp) => (
+            <div key={resp.catId} className="mb-5 flex justify-start">
+              <AgentBadge catId={resp.catId} />
+              <div className="max-w-[78%] lg:max-w-[72%]">
+                {streamingStatuses.get(resp.catId) && (
+                  <div className="mb-2 flex items-center gap-1.5 px-1 text-xs text-[var(--text-faint)]">
+                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
+                    <span>{streamingStatuses.get(resp.catId)}</span>
+                  </div>
+                )}
+                {streamingThinking.get(resp.catId) && (
+                  <ThinkingPanel
+                    content={streamingThinking.get(resp.catId)!}
+                    catId={resp.catId}
+                    catName={resp.catName}
+                  />
+                )}
+                <div className="nest-card nest-r-xl px-5 py-4">
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--text-strong)]">
+                    {resp.content}
+                  </p>
+                  <span className="animate-pulse text-[var(--text-faint)]">|</span>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {Array.from(streamingStatuses.entries())
+            .filter(([catId]) => !streamingResponses.has(catId))
+            .map(([catId, status]) => (
+              <div key={`status-${catId}`} className="mb-5 flex justify-start">
+                <AgentBadge catId={catId} />
+                <div className="max-w-[78%] lg:max-w-[72%]">
+                  <div className="mb-2 flex items-center gap-1.5 px-1 text-xs text-[var(--text-faint)]">
+                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
+                    <span>{status}</span>
+                  </div>
+                  <div className="nest-card nest-r-lg px-4 py-3 text-sm text-[var(--text-soft)]">
+                    这只猫正在赶来，消息马上到。
+                    <span className="animate-pulse text-[var(--text-faint)]">|</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+        </div>
       </div>
 
-      {/* Streaming indicator */}
       {isStreaming && <StreamingIndicator />}
 
-      {/* Input */}
       <InputBar
         disabled={isStreaming}
         replyTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
       />
 
-      {/* Search Modal */}
-      <HistorySearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-      />
+      <HistorySearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </div>
   );
 }

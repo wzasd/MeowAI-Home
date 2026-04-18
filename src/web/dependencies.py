@@ -5,6 +5,7 @@ from src.models.cat_registry import CatRegistry
 from src.models.agent_registry import AgentRegistry
 from src.config.runtime_catalog import RuntimeCatalog, get_runtime_catalog
 from src.session.chain import SessionChain
+from src.missions.store import MissionStore
 
 
 def get_thread_manager(request: Request) -> ThreadManager:
@@ -31,3 +32,8 @@ def get_runtime_catalog_dep(request: Request) -> RuntimeCatalog:
 def get_session_chain(request: Request) -> SessionChain:
     """Get session chain instance."""
     return request.app.state.session_chain
+
+
+def get_mission_store(request: Request) -> MissionStore:
+    """Get mission store instance."""
+    return request.app.state.mission_store

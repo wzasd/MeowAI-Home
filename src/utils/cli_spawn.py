@@ -54,7 +54,12 @@ async def spawn_cli(
             except json.JSONDecodeError:
                 continue
 
+        stderr_data = await process.stderr.read()
         await process.wait()
+        if process.returncode != 0:
+            stderr_text = stderr_data.decode("utf-8", errors="replace").strip()
+            detail = f": {stderr_text}" if stderr_text else ""
+            raise RuntimeError(f"CLI exited with code {process.returncode}{detail}")
 
     except asyncio.TimeoutError:
         process.terminate()

@@ -142,6 +142,14 @@ class ThreadManager:
         """
         await self._store.add_message(thread_id, message)
 
+    async def delete_message(self, thread_id: str, message_id: str) -> bool:
+        """删除 thread 中的单条消息"""
+        return await self._store.delete_message(thread_id, message_id)
+
+    async def edit_message(self, thread_id: str, message_id: str, content: str) -> bool:
+        """编辑 thread 中的单条消息"""
+        return await self._store.update_message(thread_id, message_id, content)
+
     @classmethod
     def reset(cls):
         """重置单例（测试用）"""

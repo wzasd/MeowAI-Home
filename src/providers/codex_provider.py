@@ -40,4 +40,10 @@ class CodexProvider(BaseProvider):
                         messages.append(AgentMessage(type=AgentMessageType.TEXT, content=text, cat_id=self.cat_id))
         elif event_type == "result":
             messages.append(AgentMessage(type=AgentMessageType.DONE, cat_id=self.cat_id))
+        else:
+            # Surface unknown/process events as status
+            raw = event.get("message") or event.get("content")
+            text = raw if isinstance(raw, str) else (str(raw) if raw is not None else "")
+            if text:
+                messages.append(AgentMessage(type=AgentMessageType.STATUS, content=text, cat_id=self.cat_id))
         return messages

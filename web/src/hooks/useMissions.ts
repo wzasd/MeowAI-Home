@@ -13,6 +13,7 @@ interface UseMissionsReturn {
   filterPriority: Priority | "all";
   setFilterPriority: (priority: Priority | "all") => void;
   fetchTasks: () => Promise<void>;
+  getTask: (taskId: string) => Promise<MissionTask | null>;
   createTask: (task: Omit<MissionTask, "id" | "createdAt">) => Promise<MissionTask | null>;
   updateTask: (taskId: string, updates: Partial<Omit<MissionTask, "id">>) => Promise<boolean>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<boolean>;
@@ -41,6 +42,16 @@ export function useMissions(): UseMissionsReturn {
       setLoading(false);
     }
   }, [filterPriority]);
+
+  // Get single task
+  const getTask = useCallback(async (taskId: string): Promise<MissionTask | null> => {
+    try {
+      return await api.missions.getTask(taskId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch task");
+      return null;
+    }
+  }, []);
 
   // Create task
   const createTask = useCallback(async (task: Omit<MissionTask, "id" | "createdAt">): Promise<MissionTask | null> => {
@@ -113,6 +124,7 @@ export function useMissions(): UseMissionsReturn {
     filterPriority,
     setFilterPriority,
     fetchTasks,
+    getTask,
     createTask,
     updateTask,
     updateTaskStatus,

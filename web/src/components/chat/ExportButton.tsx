@@ -49,7 +49,7 @@ export function ExportButton() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex h-8 items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-        title="导出对话"
+        title="导出猫窝"
       >
         <FileText size={14} />
         <span className="hidden sm:inline">导出</span>

@@ -35,35 +35,13 @@ class TokenUsageResponse(BaseModel):
     totalCost: float
 
 
-# In-memory metrics storage (replace with real tracking in production)
-_thread_usage: dict[str, dict] = {}
-_global_usage = {
-    "promptTokens": 45230,
-    "completionTokens": 12840,
-    "cacheHitRate": 0.72,
-    "totalCost": 0.38,
-}
-
-
-def get_thread_usage(thread_id: str) -> dict:
-    """Get or create usage record for a thread."""
-    if thread_id not in _thread_usage:
-        _thread_usage[thread_id] = {
-            "promptTokens": 0,
-            "completionTokens": 0,
-            "cacheHitRate": 0.0,
-            "totalCost": 0.0,
-        }
-    return _thread_usage[thread_id]
-
-
 @router.get("/token-usage", response_model=TokenUsageResponse)
 async def get_token_usage(threadId: Optional[str] = None):
-    """Get token usage for a thread or global."""
+    """Get token usage for a thread or global from real metrics store."""
     if threadId:
-        usage = get_thread_usage(threadId)
+        usage = await store.get_thread_usage(threadId)
     else:
-        usage = _global_usage
+        usage = await store.get_global_usage()
 
     return TokenUsageResponse(
         promptTokens=usage["promptTokens"],
@@ -80,17 +58,18 @@ async def track_usage(
     completionTokens: int,
     cost: float = 0.0,
 ):
-    """Track token usage for a thread."""
-    usage = get_thread_usage(threadId)
-    usage["promptTokens"] += promptTokens
-    usage["completionTokens"] += completionTokens
-    usage["totalCost"] += cost
-
-    # Update cache hit rate (simplified)
-    total = usage["promptTokens"] + usage["completionTokens"]
-    if total > 0:
-        usage["cacheHitRate"] = min(0.95, usage["promptTokens"] / total * 0.8)
-
+    """Track token usage for a thread by saving into the real metrics store."""
+    import time
+    db = await store._get_db()
+    await db.execute(
+        """
+        INSERT INTO invocation_metrics
+        (timestamp, cat_id, thread_id, project_path, prompt_tokens, completion_tokens, success, duration_ms, cost)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (time.time(), "", threadId, "", promptTokens, completionTokens, 1, 0, cost),
+    )
+    await db.commit()
     return {"success": True}
 
 

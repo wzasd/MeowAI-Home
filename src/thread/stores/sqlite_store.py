@@ -68,6 +68,13 @@ class SQLiteStore(ThreadStore, MessageStore):
         except Exception:
             pass  # Column already exists
 
+        # Migration: add active_task_id column if it doesn't exist
+        try:
+            await db.execute("ALTER TABLE threads ADD COLUMN active_task_id TEXT")
+            await db.commit()
+        except Exception:
+            pass  # Column already exists
+
         # 索引
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_messages_thread
@@ -92,15 +99,16 @@ class SQLiteStore(ThreadStore, MessageStore):
         db = await self._get_db()
         await db.execute("""
             INSERT INTO threads
-            (id, name, created_at, updated_at, current_cat_id, is_archived, project_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (id, name, created_at, updated_at, current_cat_id, is_archived, project_path, active_task_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
                 current_cat_id = excluded.current_cat_id,
                 is_archived = excluded.is_archived,
-                project_path = excluded.project_path
+                project_path = excluded.project_path,
+                active_task_id = excluded.active_task_id
         """, (
             thread.id,
             thread.name,
@@ -108,7 +116,8 @@ class SQLiteStore(ThreadStore, MessageStore):
             thread.updated_at.isoformat(),
             thread.current_cat_id,
             1 if thread.is_archived else 0,
-            thread.project_path
+            thread.project_path,
+            thread.active_task_id
         ))
         await db.commit()
 
@@ -134,7 +143,8 @@ class SQLiteStore(ThreadStore, MessageStore):
             current_cat_id=row[4],
             is_archived=bool(row[5]),
             messages=messages,
-            project_path=row[6] or "" if len(row) > 6 else ""
+            project_path=row[6] or "" if len(row) > 6 else "",
+            active_task_id=(row[7] or None) if len(row) > 7 else None
         )
 
     async def list_threads(self, include_archived: bool = False) -> List[Thread]:
@@ -165,7 +175,8 @@ class SQLiteStore(ThreadStore, MessageStore):
                 current_cat_id=row[4],
                 is_archived=bool(row[5]),
                 messages=messages,
-                project_path=row[6] or "" if len(row) > 6 else ""
+                project_path=row[6] or "" if len(row) > 6 else "",
+                active_task_id=(row[7] or None) if len(row) > 7 else None
             ))
 
         return threads
@@ -221,7 +232,7 @@ class SQLiteStore(ThreadStore, MessageStore):
         """分页获取消息"""
         db = await self._get_db()
         cursor = await db.execute(
-            """SELECT role, content, cat_id, timestamp, metadata FROM messages
+            """SELECT id, role, content, cat_id, timestamp, metadata FROM messages
                WHERE thread_id = ?
                ORDER BY timestamp ASC
                LIMIT ? OFFSET ?""",
@@ -231,20 +242,41 @@ class SQLiteStore(ThreadStore, MessageStore):
 
         return [
             Message(
-                role=row[0],
-                content=row[1],
-                cat_id=row[2],
-                timestamp=datetime.fromisoformat(row[3]),
-                metadata=json.loads(row[4]) if row[4] else None
+                id=str(row[0]),
+                role=row[1],
+                content=row[2],
+                cat_id=row[3],
+                timestamp=datetime.fromisoformat(row[4]),
+                metadata=json.loads(row[5]) if row[5] else None
             )
             for row in rows
         ]
+
+    async def delete_message(self, thread_id: str, message_id: str) -> bool:
+        """删除消息"""
+        db = await self._get_db()
+        cursor = await db.execute(
+            "DELETE FROM messages WHERE id = ? AND thread_id = ?",
+            (message_id, thread_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+    async def update_message(self, thread_id: str, message_id: str, content: str) -> bool:
+        """更新消息内容"""
+        db = await self._get_db()
+        cursor = await db.execute(
+            "UPDATE messages SET content = ? WHERE id = ? AND thread_id = ?",
+            (content, message_id, thread_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
 
     async def search_messages(self, thread_id: str, query: str) -> List[Message]:
         """搜索消息内容"""
         db = await self._get_db()
         cursor = await db.execute(
-            """SELECT role, content, cat_id, timestamp, metadata FROM messages
+            """SELECT id, role, content, cat_id, timestamp, metadata FROM messages
                WHERE thread_id = ? AND content LIKE ?
                ORDER BY timestamp ASC""",
             (thread_id, f"%{query}%")
@@ -253,11 +285,12 @@ class SQLiteStore(ThreadStore, MessageStore):
 
         return [
             Message(
-                role=row[0],
-                content=row[1],
-                cat_id=row[2],
-                timestamp=datetime.fromisoformat(row[3]),
-                metadata=json.loads(row[4]) if row[4] else None
+                id=str(row[0]),
+                role=row[1],
+                content=row[2],
+                cat_id=row[3],
+                timestamp=datetime.fromisoformat(row[4]),
+                metadata=json.loads(row[5]) if row[5] else None
             )
             for row in rows
         ]

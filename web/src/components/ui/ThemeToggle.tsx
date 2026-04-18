@@ -9,7 +9,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggleDarkMode}
-      className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+      className="nest-button-secondary flex h-9 w-9 items-center justify-center rounded-full"
       title={isDarkMode ? "切换到浅色模式" : "切换到深色模式"}
     >
       {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}

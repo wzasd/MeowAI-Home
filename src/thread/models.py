@@ -16,6 +16,7 @@ class Message:
     content: str
     cat_id: Optional[str] = None  # 如果是猫回复，记录是哪只
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    id: Optional[str] = None  # 数据库消息ID
     thinking: Optional[str] = None  # 思考过程（可选）
     is_internal: bool = False  # 是否是 A2A 内部对话
     parent_id: Optional[str] = None  # 关联的父消息ID（用于A2A链）
@@ -28,6 +29,8 @@ class Message:
             "cat_id": self.cat_id,
             "timestamp": self.timestamp.isoformat()
         }
+        if self.id:
+            result["id"] = self.id
         if self.thinking:
             result["thinking"] = self.thinking
         if self.is_internal:
@@ -56,6 +59,7 @@ class Message:
             content=data["content"],
             cat_id=data.get("cat_id"),
             timestamp=datetime.fromisoformat(data["timestamp"]),
+            id=data.get("id"),
             thinking=data.get("thinking"),
             is_internal=data.get("is_internal", False),
             parent_id=data.get("parent_id"),
@@ -74,6 +78,7 @@ class Thread:
     current_cat_id: str = DEFAULT_CAT_ID
     is_archived: bool = False
     project_path: str = ""  # 项目目录路径
+    active_task_id: Optional[str] = None  # 当前聚焦的任务
 
     @classmethod
     def create(cls, name: str, current_cat_id: str = DEFAULT_CAT_ID, project_path: str = "") -> "Thread":
@@ -108,6 +113,8 @@ class Thread:
         }
         if self.project_path:
             result["project_path"] = self.project_path
+        if self.active_task_id:
+            result["active_task_id"] = self.active_task_id
         return result
 
     @classmethod
@@ -126,5 +133,6 @@ class Thread:
             messages=[Message.from_dict(m) for m in data.get("messages", [])],
             current_cat_id=data.get("current_cat_id", DEFAULT_CAT_ID),
             is_archived=data.get("is_archived", False),
-            project_path=data.get("project_path") or ""
+            project_path=data.get("project_path") or "",
+            active_task_id=data.get("active_task_id") or None
         )

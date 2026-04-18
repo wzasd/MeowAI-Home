@@ -25,6 +25,7 @@ class AgentMessageType(str, Enum):
     ERROR = "error"
     DONE = "done"
     USAGE = "usage"
+    STATUS = "status"
 
 
 @dataclass

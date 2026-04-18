@@ -381,3 +381,149 @@ async def test_git_diff_path_traversal(app_client):
 
     response = await client.get("/api/workspace/git-diff?worktreeId=test-git-diff-trav&path=../../../etc/passwd")
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_create_terminal_job(app_client):
+    """Test creating an async terminal job."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-term-job"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    response = await client.post("/api/workspace/terminal/jobs", json={
+        "worktreeId": "test-term-job",
+        "command": "echo hello"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert "job_id" in data
+    assert "status" in data
+
+
+@pytest.mark.asyncio
+async def test_terminal_job_blocked(app_client):
+    """Test blocked dangerous commands on job endpoint."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-term-job-block"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    response = await client.post("/api/workspace/terminal/jobs", json={
+        "worktreeId": "test-term-job-block",
+        "command": "rm -rf /"
+    })
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_terminal_job_not_found(app_client):
+    """Test terminal job for non-existent worktree."""
+    client, tmpdir = app_client
+
+    response = await client.post("/api/workspace/terminal/jobs", json={
+        "worktreeId": "nonexistent",
+        "command": "echo hi"
+    })
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_terminal_job_stream(app_client):
+    """Test SSE stream for a terminal job."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-term-stream"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    create_resp = await client.post("/api/workspace/terminal/jobs", json={
+        "worktreeId": "test-term-stream",
+        "command": "echo hello"
+    })
+    assert create_resp.status_code == 200
+    job_id = create_resp.json()["job_id"]
+
+    events = []
+    async with client.stream("GET", f"/api/workspace/terminal/jobs/{job_id}/stream") as stream:
+        async for line in stream.aiter_lines():
+            if line.startswith("data: "):
+                import json
+                events.append(json.loads(line[6:]))
+                if events[-1].get("type") in ("exited", "error", "timeout"):
+                    break
+
+    assert len(events) > 0
+    assert any(e.get("type") == "status" for e in events)
+    assert any(e.get("type") == "stdout" for e in events)
+    assert any(e.get("type") == "exited" for e in events)
+
+
+@pytest.mark.asyncio
+async def test_terminal_job_cancel(app_client):
+    """Test cancelling a terminal job."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-term-cancel"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    create_resp = await client.post("/api/workspace/terminal/jobs", json={
+        "worktreeId": "test-term-cancel",
+        "command": "sleep 30"
+    })
+    assert create_resp.status_code == 200
+    job_id = create_resp.json()["job_id"]
+
+    cancel_resp = await client.post(f"/api/workspace/terminal/jobs/{job_id}/cancel")
+    assert cancel_resp.status_code == 200
+    data = cancel_resp.json()
+    assert data["success"] is True
+
+    import asyncio
+    await asyncio.sleep(0.5)
+
+    get_resp = await client.get(f"/api/workspace/terminal/jobs/{job_id}")
+    assert get_resp.status_code == 200
+    snapshot = get_resp.json()
+    assert snapshot["status"] in ("cancelled", "cancelling")
+
+
+@pytest.mark.asyncio
+async def test_terminal_job_stream_late_subscribe(app_client):
+    """Test that a late SSE subscriber receives replayed stdout/stderr and exited."""
+    client, tmpdir = app_client
+
+    worktree_path = Path(tmpdir) / "worktrees" / "test-term-late"
+    worktree_path.mkdir(parents=True)
+    (worktree_path / ".git").mkdir()
+
+    create_resp = await client.post("/api/workspace/terminal/jobs", json={
+        "worktreeId": "test-term-late",
+        "command": "echo hello"
+    })
+    assert create_resp.status_code == 200
+    job_id = create_resp.json()["job_id"]
+
+    # Wait for the fast command to finish before subscribing
+    import asyncio
+    for _ in range(20):
+        await asyncio.sleep(0.1)
+        snap = await client.get(f"/api/workspace/terminal/jobs/{job_id}")
+        if snap.json().get("status") in ("done", "failed"):
+            break
+
+    events = []
+    async with client.stream("GET", f"/api/workspace/terminal/jobs/{job_id}/stream") as stream:
+        async for line in stream.aiter_lines():
+            if line.startswith("data: "):
+                import json
+                events.append(json.loads(line[6:]))
+                if events[-1].get("type") in ("exited", "error", "timeout"):
+                    break
+
+    assert any(e.get("type") == "status" for e in events)
+    assert any(e.get("type") == "stdout" and "hello" in e.get("text", "") for e in events)
+    assert any(e.get("type") == "exited" for e in events)

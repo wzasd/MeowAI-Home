@@ -52,8 +52,12 @@ class ClaudeProvider(BaseProvider):
         event_type = event.get("type", "")
         messages = []
 
-        # Skip system/hook events (startup hooks, etc.)
+        # Surface system/hook events as status so users can see process state
         if event_type in ("system",):
+            raw = event.get("message")
+            text = raw if isinstance(raw, str) else (str(raw) if raw is not None else "")
+            if text:
+                messages.append(AgentMessage(type=AgentMessageType.STATUS, content=text, cat_id=self.cat_id))
             return messages
 
         if event_type == "assistant":
