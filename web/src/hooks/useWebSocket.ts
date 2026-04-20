@@ -6,11 +6,14 @@ import { useThreadStore } from "../stores/threadStore";
 import { useChatStore } from "../stores/chatStore";
 import type { MessageResponse, Attachment } from "../types";
 
+const STREAM_TIMEOUT_MS = 60_000;
+
 export function useWebSocket() {
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const wsRef = useRef<WSManager | null>(null);
   const connectedIdRef = useRef<string | null>(null);
   const mountedRef = useRef(false);
+  const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const addLocalMessage = useChatStore((s) => s.addLocalMessage);
   const addStreamingResponse = useChatStore((s) => s.addStreamingResponse);
@@ -76,6 +79,7 @@ export function useWebSocket() {
       setStreamingStatus(data.cat_id as string, data.content as string);
     });
     ws.on("done", () => {
+      if (streamTimeoutRef.current) clearTimeout(streamTimeoutRef.current);
       stopStreaming();
       fetchMessages(currentThreadId);
     });
@@ -85,6 +89,7 @@ export function useWebSocket() {
     ws.on("error", (data) => {
       console.error("WebSocket error:", data.message);
       addSystemError(`连接异常: ${data.message || "服务端处理失败"}`);
+      if (streamTimeoutRef.current) clearTimeout(streamTimeoutRef.current);
       stopStreaming();
     });
 
@@ -103,8 +108,16 @@ export function useWebSocket() {
       const ws = wsRef.current;
       if (!ws || !ws.isConnected) {
         console.error("[WS] Cannot send - ws=", !!ws, "connected=", ws?.isConnected);
+        useChatStore.getState().stopStreaming();
         return;
       }
+
+      // Start timeout guard — auto stopStreaming if no "done" within limit
+      if (streamTimeoutRef.current) clearTimeout(streamTimeoutRef.current);
+      streamTimeoutRef.current = setTimeout(() => {
+        console.warn("[WS] Streaming timeout — resetting isStreaming");
+        useChatStore.getState().stopStreaming();
+      }, STREAM_TIMEOUT_MS);
 
       if (forceIntent) {
         console.log("[WS] Sending with intent:", forceIntent, content.substring(0, 60));

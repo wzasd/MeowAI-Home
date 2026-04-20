@@ -39,6 +39,10 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
   const previousThreadIdRef = useRef<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(true);
+  const [newMessageCount, setNewMessageCount] = useState(0);
+  const prevMessageCountRef = useRef(0);
+  const knownMsgIdsRef = useRef<Set<string>>(new Set());
   const projectName = currentThread?.project_path?.split("/").filter(Boolean).pop();
 
   // Fetch messages when thread changes
@@ -64,18 +68,69 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [setReplyingTo]);
 
-  // Auto-scroll only inside the message pane, not the whole page.
+  // Smart scroll: only follow if user is at bottom.
+  // Show "new message" capsule when reading history.
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
     const isThreadSwitch = previousThreadIdRef.current !== currentThread?.id;
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: isThreadSwitch ? "auto" : "smooth",
-    });
-    previousThreadIdRef.current = currentThread?.id ?? null;
-  }, [currentThread?.id, messages, streamingResponses]);
+    if (isThreadSwitch) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
+      setIsUserAtBottom(true);
+      setNewMessageCount(0);
+      previousThreadIdRef.current = currentThread?.id ?? null;
+      prevMessageCountRef.current = messages.length;
+      // Mark all current messages as known (no entrance animation on load)
+      knownMsgIdsRef.current = new Set(messages.filter((m) => m.id).map((m) => m.id));
+      return;
+    }
+
+    // Detect truly new messages (not in known set)
+    const newIds: string[] = [];
+    for (const m of messages) {
+      if (!knownMsgIdsRef.current.has(m.id)) {
+        newIds.push(m.id);
+      }
+    }
+    for (const id of newIds) {
+      if (id) knownMsgIdsRef.current.add(id);
+    }
+
+    const newCount = newIds.length;
+
+    if (newCount > 0 && isUserAtBottom) {
+      // User is at bottom — follow the conversation
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      setNewMessageCount(0);
+    } else if (newCount > 0) {
+      // User is reading history — show capsule
+      setNewMessageCount((c) => c + newCount);
+    }
+  }, [currentThread?.id, messages, isUserAtBottom]);
+
+  // Track whether user is at bottom of scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const threshold = 80;
+      const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+      setIsUserAtBottom(atBottom);
+      if (atBottom) setNewMessageCount(0);
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Also follow streaming responses if at bottom
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !isUserAtBottom) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  }, [streamingResponses, isUserAtBottom]);
 
   // Message handlers
   const handleReply = (msg: MessageResponse) => {
@@ -196,19 +251,26 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
             </div>
           )}
 
-          {messages.map((msg, i) => (
-            <MessageBubble
-              key={i}
-              message={msg}
-              isEditing={editingId === msg.id}
-              onReply={() => handleReply(msg)}
-              onEdit={(content) => handleEdit(msg, content)}
-              onDelete={() => handleDelete(msg)}
-              onBranch={() => handleBranch(msg)}
-              onStartEdit={() => setEditingId(msg.id)}
-              onCancelEdit={() => setEditingId(null)}
-            />
-          ))}
+          {messages.map((msg, i) => {
+            const prevMsg = i > 0 ? messages[i - 1] : null;
+            const isConsecutive = !!(prevMsg && prevMsg.cat_id && prevMsg.cat_id === msg.cat_id);
+            const isNew = msg.id ? !knownMsgIdsRef.current.has(msg.id) : false;
+            return (
+              <MessageBubble
+                key={msg.id || `msg-${i}`}
+                message={msg}
+                isEditing={editingId === msg.id}
+                isEntering={isNew}
+                isConsecutive={isConsecutive}
+                onReply={() => handleReply(msg)}
+                onEdit={(content) => handleEdit(msg, content)}
+                onDelete={() => handleDelete(msg)}
+                onBranch={() => handleBranch(msg)}
+                onStartEdit={() => setEditingId(msg.id)}
+                onCancelEdit={() => setEditingId(null)}
+              />
+            );
+          })}
 
           {Array.from(streamingResponses.values()).map((resp) => (
             <div key={resp.catId} className="mb-5 flex justify-start">
@@ -227,7 +289,8 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
                     catName={resp.catName}
                   />
                 )}
-                <div className="nest-card nest-r-xl px-5 py-4">
+                <div className="nest-card nest-r-xl relative px-5 py-4 overflow-hidden">
+                  <div className="msg-ink-line" />
                   <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--text-strong)]">
                     {resp.content}
                   </p>
@@ -258,6 +321,25 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
       </div>
 
       {isStreaming && <StreamingIndicator />}
+
+      {newMessageCount > 0 && !isUserAtBottom && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10">
+          <button
+            onClick={() => {
+              const container = scrollContainerRef.current;
+              if (container) {
+                container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+                setNewMessageCount(0);
+                setIsUserAtBottom(true);
+              }
+            }}
+            className="msg-capsule nest-button-primary flex items-center gap-2 rounded-full px-4 py-2 text-xs shadow-lg"
+          >
+            <span className="inline-block h-2 w-2 rounded-full bg-white/70" />
+            {newMessageCount} 条新消息
+          </button>
+        </div>
+      )}
 
       <InputBar
         disabled={isStreaming}

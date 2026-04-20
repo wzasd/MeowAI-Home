@@ -135,9 +135,11 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
         {
             "type": "message_sent",
             "message": {
+                "id": user_msg.id,
                 "role": "user",
                 "content": intent.clean_message,
                 "cat_id": None,
+                "timestamp": user_msg.timestamp.isoformat() if user_msg.timestamp else None,
                 "metadata": metadata,
             },
         }

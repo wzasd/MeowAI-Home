@@ -9,17 +9,32 @@ from src.utils.cli_spawn import spawn_cli
 
 
 class ClaudeProvider(BaseProvider):
+    def __init__(self, config: CatConfig):
+        super().__init__(config)
+        self._saw_stream_event = False
+
     def _build_args(self, prompt: str, options: InvocationOptions) -> list:
         args = ["--print"]
 
         # Carry over base args from config, but skip our own managed flags
+        managed_flags = {"--output-format", "--model", "stream-json"}
+        skip_next = False
         for arg in self.config.cli_args:
-            if arg in ("--output-format", "stream-json"):
+            if skip_next:
+                skip_next = False
+                continue
+            if arg in managed_flags:
+                if arg.startswith("--"):
+                    skip_next = True
                 continue
             args.append(arg)
 
         # Always use stream-json for real-time streaming
-        args.extend(["--output-format", "stream-json", "--verbose"])
+        args.extend(["--output-format", "stream-json", "--verbose", "--include-partial-messages"])
+
+        # Model from cat config (e.g. claude-opus-4-6, claude-sonnet-4-6)
+        if self.config.default_model:
+            args.extend(["--model", self.config.default_model])
 
         if options and options.system_prompt:
             args.extend(["--append-system-prompt", options.system_prompt])
@@ -27,6 +42,9 @@ class ClaudeProvider(BaseProvider):
             args.extend(["--resume", options.session_id])
         if options and options.effort:
             args.extend(["--effort", options.effort])
+        if options and options.mcp_config:
+            import json
+            args.extend(["--mcp-config", json.dumps(options.mcp_config)])
         if options and options.extra_args:
             args.extend(options.extra_args)
         args.append(prompt)
@@ -35,6 +53,7 @@ class ClaudeProvider(BaseProvider):
     async def invoke(self, prompt: str, options: InvocationOptions = None) -> AsyncIterator[AgentMessage]:
         if options is None:
             options = InvocationOptions()
+        self._saw_stream_event = False
         args = self._build_args(prompt, options)
         timeout = options.timeout or 300.0
         try:
@@ -60,13 +79,34 @@ class ClaudeProvider(BaseProvider):
                 messages.append(AgentMessage(type=AgentMessageType.STATUS, content=text, cat_id=self.cat_id))
             return messages
 
+        # Stream events from --include-partial-messages: real incremental chunks
+        if event_type == "stream_event":
+            self._saw_stream_event = True
+            se = event.get("stream_event", event.get("event", {}))
+            se_type = se.get("type", "")
+            if se_type == "content_block_delta":
+                delta = se.get("delta", {})
+                text = delta.get("text", "")
+                if text:
+                    messages.append(AgentMessage(type=AgentMessageType.TEXT, content=text, cat_id=self.cat_id))
+            elif se_type == "content_block_start":
+                cb = se.get("content_block", {})
+                if cb.get("type") == "thinking":
+                    # Thinking block started — emit status
+                    messages.append(AgentMessage(type=AgentMessageType.STATUS, content="思考中...", cat_id=self.cat_id))
+            return messages
+
         if event_type == "assistant":
+            # If we already sent incremental chunks via stream_event,
+            # skip the full TEXT content to avoid duplication.
+            # Still emit USAGE and THINKING.
             msg_data = event.get("message", {})
             for block in msg_data.get("content", []):
                 if isinstance(block, dict) and block.get("type") == "text":
-                    text = block.get("text", "")
-                    if text:
-                        messages.append(AgentMessage(type=AgentMessageType.TEXT, content=text, cat_id=self.cat_id))
+                    if not self._saw_stream_event:
+                        text = block.get("text", "")
+                        if text:
+                            messages.append(AgentMessage(type=AgentMessageType.TEXT, content=text, cat_id=self.cat_id))
                 elif isinstance(block, dict) and block.get("type") == "thinking":
                     text = block.get("thinking") or block.get("text", "")
                     if text:

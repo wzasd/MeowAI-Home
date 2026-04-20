@@ -204,20 +204,12 @@ export class ApiError extends Error {
   }
 }
 
-function getToken(): string | null {
-  return localStorage.getItem("meowai:token");
-}
-
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = getToken();
   const isFormData = options?.body instanceof FormData;
 
   const headers: Record<string, string> = {};
   if (!isFormData) {
     headers["Content-Type"] = "application/json";
-  }
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
   }
   if (options?.headers) {
     const extra = options.headers as Record<string, string>;
@@ -643,12 +635,8 @@ export const api = {
       onEvent: (event: TerminalJobEvent) => void,
       onError?: () => void
     ) => {
-      const token = getToken();
       const url = buildApiUrl(`/api/workspace/terminal/jobs/${jobId}/stream`);
       const headers: Record<string, string> = {};
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
 
       const abortController = new AbortController();
 
@@ -707,16 +695,12 @@ export const api = {
 
   voice: {
     tts: async (text: string, catId: string, threadId: string): Promise<Blob> => {
-      const token = getToken();
       const formData = new FormData();
       formData.append("text", text);
       formData.append("cat_id", catId);
       formData.append("thread_id", threadId);
 
       const headers: Record<string, string> = {};
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
 
       let res: Response;
       try {

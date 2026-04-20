@@ -20,6 +20,7 @@ import { SignalInboxPage } from "./components/signals/SignalInboxPage";
 import { MissionHubPage } from "./components/mission/MissionHubPage";
 import { WorkspacePanel } from "./components/workspace/WorkspacePanel";
 import { useThemeStore } from "./stores/themeStore";
+import { useChatStore } from "./stores/chatStore";
 import { useThreadStore } from "./stores/threadStore";
 import { SlidingNav } from "./components/ui/SlidingNav";
 
@@ -41,6 +42,10 @@ export default function App() {
   const { isDarkMode } = useThemeStore();
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const currentNav = NAV_ITEMS.find((item) => item.key === currentPage) ?? NAV_ITEMS[0]!;
+
+  // Reset stale streaming state on mount (e.g. after HMR or page reload)
+  const stopStreaming = useChatStore((s) => s.stopStreaming);
+  useEffect(() => { stopStreaming(); }, [stopStreaming]);
 
   // Close mobile menu on escape
   useEffect(() => {

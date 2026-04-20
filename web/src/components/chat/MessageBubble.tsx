@@ -67,6 +67,12 @@ function MessageMetaInline({ meta }: MessageMetaProps) {
 interface MessageBubbleProps {
   message: MessageResponse;
   isEditing?: boolean;
+  /** Whether this is a new message entering the view (triggers entrance animation) */
+  isEntering?: boolean;
+  /** Whether this is a consecutive message from the same cat (weakened entrance) */
+  isConsecutive?: boolean;
+  /** Whether this message just finished streaming (triggers finalize stamp) */
+  isFinalizing?: boolean;
   onReply?: () => void;
   onEdit?: (content: string) => void;
   onDelete?: () => void;
@@ -78,6 +84,9 @@ interface MessageBubbleProps {
 export function MessageBubble({
   message,
   isEditing,
+  isEntering = true,
+  isConsecutive = false,
+  isFinalizing = false,
   onReply,
   onEdit,
   onDelete,
@@ -101,9 +110,14 @@ export function MessageBubble({
     }
   };
 
+  const bubbleAnimClass = isEntering
+    ? (isConsecutive ? "msg-enter-bubble-weak" : "msg-enter-bubble")
+    : "";
+  const finalizeClass = isFinalizing ? "msg-finalize" : "";
+
   return (
     <div
-      className={`group mb-5 flex ${isUser ? "justify-end" : "justify-start"}`}
+      className={`group mb-5 flex ${isUser ? "justify-end" : "justify-start"} ${isEntering && !isConsecutive ? "msg-enter-header" : ""}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
@@ -163,7 +177,7 @@ export function MessageBubble({
           </div>
         ) : (
           <div
-            className={`nest-r-xl px-5 py-4 transition-transform duration-150 group-hover:-translate-y-0.5 ${
+            className={`nest-r-xl px-5 py-4 transition-transform duration-150 group-hover:-translate-y-0.5 ${bubbleAnimClass} ${finalizeClass} ${
               isUser
                 ? "nest-user-bubble"
                 : isError
@@ -219,7 +233,7 @@ export function MessageBubble({
         {/* Message actions */}
         {!isEditing && (
           <div
-            className={`mt-2 flex items-center gap-2 px-1 text-[10px] ${
+            className={`mt-2 flex items-center gap-2 px-1 text-[10px] ${isEntering ? "msg-meta-enter" : ""} ${
               isUser ? "justify-end" : "justify-start"
             }`}
           >
