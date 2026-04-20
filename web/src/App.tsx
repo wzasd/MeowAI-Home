@@ -20,9 +20,7 @@ import { SignalInboxPage } from "./components/signals/SignalInboxPage";
 import { MissionHubPage } from "./components/mission/MissionHubPage";
 import { WorkspacePanel } from "./components/workspace/WorkspacePanel";
 import { useThemeStore } from "./stores/themeStore";
-import { useAuthStore } from "./stores/authStore";
 import { useThreadStore } from "./stores/threadStore";
-import { LoginModal } from "./components/auth/LoginModal";
 import { SlidingNav } from "./components/ui/SlidingNav";
 
 type Page = "chat" | "signals" | "mission" | "workspace";
@@ -41,15 +39,8 @@ export default function App() {
   const [isRightPanelOpen, setIsRightPanelOpen] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<Page>("chat");
   const { isDarkMode } = useThemeStore();
-  const token = useAuthStore((s) => s.token);
-  const isAuthLoading = useAuthStore((s) => s.isLoading);
-  const initAuth = useAuthStore((s) => s.init);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const currentNav = NAV_ITEMS.find((item) => item.key === currentPage) ?? NAV_ITEMS[0]!;
-
-  useEffect(() => {
-    initAuth();
-  }, [initAuth]);
 
   // Close mobile menu on escape
   useEffect(() => {
@@ -63,26 +54,6 @@ export default function App() {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
-
-  if (isAuthLoading) {
-    return (
-      <div className={isDarkMode ? "dark" : ""}>
-        <div className="flex h-screen items-center justify-center bg-[var(--bg-canvas)] text-[var(--text-soft)] transition-colors">
-          <div className="nest-panel-strong nest-r-xl px-8 py-6 text-sm">正在整理猫窝工作室...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!token) {
-    return (
-      <div className={isDarkMode ? "dark" : ""}>
-        <div className="flex h-screen overflow-hidden bg-[var(--bg-canvas)] transition-colors">
-          <LoginModal />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={isDarkMode ? "dark" : ""}>

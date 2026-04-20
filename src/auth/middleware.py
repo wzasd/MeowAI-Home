@@ -46,34 +46,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if path in public_exact or any(path.startswith(p) for p in public_prefixes):
             return await call_next(request)
 
-        # Extract and verify token
+        # Extract and verify token (optional — allow anonymous access)
         auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return JSONResponse(
-                {"error": "Missing or invalid authorization header"},
-                status_code=401
-            )
-
-        token = auth_header[7:]  # Remove "Bearer " prefix
-
-        if jwt is None:
-            return JSONResponse(
-                {"error": "JWT support not available"},
-                status_code=500
-            )
-
-        try:
-            payload = jwt.decode(token, self.secret, algorithms=["HS256"])
-            request.state.user = payload
-        except jwt.ExpiredSignatureError:
-            return JSONResponse(
-                {"error": "Token expired"},
-                status_code=401
-            )
-        except jwt.InvalidTokenError:
-            return JSONResponse(
-                {"error": "Invalid token"},
-                status_code=401
-            )
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            if jwt is not None:
+                try:
+                    payload = jwt.decode(token, self.secret, algorithms=["HS256"])
+                    request.state.user = payload
+                except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+                    pass
 
         return await call_next(request)
