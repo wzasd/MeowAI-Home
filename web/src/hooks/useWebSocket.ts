@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { WSManager } from "../api/websocket";
 import { useThreadStore } from "../stores/threadStore";
 import { useChatStore } from "../stores/chatStore";
+import type { QueueEntryResponse } from "../stores/chatStore";
 import type { MessageResponse, Attachment } from "../types";
 
 const STREAM_TIMEOUT_MS = 60_000;
@@ -25,6 +26,7 @@ export function useWebSocket() {
   const setIntentMode = useChatStore((s) => s.setIntentMode);
   const setWsConnected = useChatStore((s) => s.setWsConnected);
   const addSystemError = useChatStore((s) => s.addSystemError);
+  const setQueueEntries = useChatStore((s) => s.setQueueEntries);
 
   // Track first mount (skip Strict Mode double-fire)
   useEffect(() => {
@@ -83,6 +85,9 @@ export function useWebSocket() {
       stopStreaming();
       fetchMessages(currentThreadId);
     });
+    ws.on("queue_updated", (data) => {
+      setQueueEntries((data.entries ?? []) as QueueEntryResponse[]);
+    });
     ws.on("session_created", () => {
       window.dispatchEvent(new CustomEvent("meowai:session_created"));
     });
@@ -102,7 +107,7 @@ export function useWebSocket() {
   // Stable send handler — always uses wsRef
   useEffect(() => {
     const handleSend = (e: Event) => {
-      const { content, attachments, forceIntent } = (e as CustomEvent<{ content: string; attachments?: Attachment[]; forceIntent?: "ideate" | "execute" }>).detail;
+      const { content, attachments, forceIntent, deliveryMode } = (e as CustomEvent<{ content: string; attachments?: Attachment[]; forceIntent?: "ideate" | "execute"; deliveryMode?: "queue" | "force" }>).detail;
       if (!content) return;
 
       const ws = wsRef.current;
@@ -122,6 +127,9 @@ export function useWebSocket() {
       if (forceIntent) {
         console.log("[WS] Sending with intent:", forceIntent, content.substring(0, 60));
         ws.sendCommand(content, forceIntent, attachments);
+      } else if (deliveryMode) {
+        console.log("[WS] Sending with deliveryMode:", deliveryMode, content.substring(0, 60));
+        ws.sendWithDeliveryMode(content, deliveryMode, attachments);
       } else {
         console.log("[WS] Sending:", content.substring(0, 60));
         ws.send(content, attachments);
@@ -134,11 +142,20 @@ export function useWebSocket() {
         ws.sendInteractiveAction(blockId, values);
       }
     };
+    const handleCancelQueueEntry = (e: Event) => {
+      const { entryId } = (e as CustomEvent<{ entryId: string }>).detail;
+      const ws = wsRef.current;
+      if (ws && ws.isConnected) {
+        ws.cancelQueueEntry(entryId);
+      }
+    };
     window.addEventListener("meowai:send", handleSend);
     window.addEventListener("meowai:interactive_action", handleInteractiveAction);
+    window.addEventListener("meowai:cancel_queue_entry", handleCancelQueueEntry);
     return () => {
       window.removeEventListener("meowai:send", handleSend);
       window.removeEventListener("meowai:interactive_action", handleInteractiveAction);
+      window.removeEventListener("meowai:cancel_queue_entry", handleCancelQueueEntry);
     };
   }, []);
 

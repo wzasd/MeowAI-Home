@@ -4,6 +4,20 @@ import { create } from "zustand";
 import { api } from "../api/client";
 import type { MessageResponse, StreamingCatResponse } from "../types";
 
+export type DeliveryMode = "queue" | "force" | undefined;
+
+export interface QueueEntryResponse {
+  id: string;
+  thread_id: string;
+  user_id: string;
+  content: string;
+  target_cats: string[];
+  status: string;
+  created_at: number;
+  source: string;
+  intent: string;
+}
+
 interface ChatState {
   messages: MessageResponse[];
   streamingResponses: Map<string, StreamingCatResponse>;
@@ -15,6 +29,8 @@ interface ChatState {
   targetCats: string[] | null;
   replyingTo: MessageResponse | null;
   wsConnected: boolean;
+  queueEntries: QueueEntryResponse[];
+  deliveryMode: DeliveryMode;
 
   fetchMessages: (threadId: string) => Promise<void>;
   addLocalMessage: (msg: MessageResponse) => void;
@@ -31,6 +47,9 @@ interface ChatState {
   stopStreaming: () => void;
   addSystemError: (content: string) => void;
   addSystemMessage: (content: string) => void;
+  setQueueEntries: (entries: QueueEntryResponse[]) => void;
+  setDeliveryMode: (mode: DeliveryMode) => void;
+  clearQueue: () => void;
   clearAll: () => void;
 }
 
@@ -45,6 +64,8 @@ export const useChatStore = create<ChatState>((set) => ({
   targetCats: null,
   replyingTo: null,
   wsConnected: false,
+  queueEntries: [],
+  deliveryMode: undefined,
 
   fetchMessages: async (threadId: string) => {
     const data = await api.messages.list(threadId);
@@ -164,6 +185,10 @@ export const useChatStore = create<ChatState>((set) => ({
     }));
   },
 
+  setQueueEntries: (entries) => set({ queueEntries: entries }),
+  setDeliveryMode: (mode) => set({ deliveryMode: mode }),
+  clearQueue: () => set({ queueEntries: [], deliveryMode: undefined }),
+
   clearAll: () =>
     set({
       messages: [],
@@ -175,5 +200,7 @@ export const useChatStore = create<ChatState>((set) => ({
       intentMode: null,
       replyingTo: null,
       wsConnected: false,
+      queueEntries: [],
+      deliveryMode: undefined,
     }),
 }));

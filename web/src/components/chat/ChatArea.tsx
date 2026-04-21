@@ -5,6 +5,7 @@ import { useRef, useEffect, useState } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { InputBar } from "./InputBar";
 import { StreamingIndicator } from "./StreamingIndicator";
+import { InlineQueuePanel } from "./InlineQueuePanel";
 import { AgentBadge } from "./AgentBadge";
 import { IntentBadge } from "./IntentBadge";
 import { ThinkingPanel } from "./ThinkingPanel";
@@ -321,6 +322,8 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
       </div>
 
       {isStreaming && <StreamingIndicator />}
+
+      <InlineQueuePanel />
 
       {newMessageCount > 0 && !isUserAtBottom && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10">

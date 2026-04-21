@@ -1,5 +1,6 @@
 """WebSocket endpoint for streaming agent responses."""
 
+import asyncio
 import logging
 import time
 
@@ -15,6 +16,24 @@ from src.workflow.templates import WorkflowTemplateFactory
 router = APIRouter()
 manager = ConnectionManager()
 log = logging.getLogger(__name__)
+
+
+def _serialize_queue_entries(entries):
+    """Serialize queue entries for WS events."""
+    return [
+        {
+            "id": e.id,
+            "thread_id": e.thread_id,
+            "user_id": e.user_id,
+            "content": e.content,
+            "target_cats": e.target_cats,
+            "status": e.status,
+            "created_at": e.created_at,
+            "source": e.source,
+            "intent": e.intent,
+        }
+        for e in entries
+    ]
 
 
 @router.websocket("/ws/{thread_id}")
@@ -37,6 +56,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 )
             elif data.get("type") == "interactive_action":
                 await _handle_interactive_action(websocket, thread_id, data, tm)
+            elif data.get("type") == "cancel_queue_entry":
+                await _handle_cancel_queue_entry(websocket, thread_id, data, app)
             elif data.get("type") == "ping":
                 await websocket.send_json({"type": "pong"})
 
@@ -44,6 +65,21 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         pass
     finally:
         manager.remove(thread_id, websocket)
+
+
+async def _handle_cancel_queue_entry(websocket, thread_id, data, app):
+    """Cancel a queued entry via WS message."""
+    entry_id = data.get("entry_id")
+    invocation_queue = getattr(app.state, "invocation_queue", None)
+    if not invocation_queue or not entry_id:
+        return
+
+    invocation_queue.cancel_entry(entry_id)
+    await manager.broadcast(thread_id, {
+        "type": "queue_updated",
+        "thread_id": thread_id,
+        "entries": _serialize_queue_entries(invocation_queue.list_entries(thread_id=thread_id)),
+    })
 
 
 async def _handle_interactive_action(websocket, thread_id, data, tm):
@@ -119,10 +155,23 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
             workflow=intent.workflow,
         )
 
-    # Cancel any active invocations for this thread
+    # --- Queue-aware routing ---
     tracker = getattr(app.state, "invocation_tracker", None)
-    if tracker:
-        tracker.cancel_all(thread_id)
+    invocation_queue = getattr(app.state, "invocation_queue", None)
+
+    delivery_mode = data.get("deliveryMode")  # "queue" | "force" | None (auto)
+
+    # Determine if we should enqueue
+    should_enqueue = False
+    if tracker and invocation_queue:
+        active_cats = tracker.get_active_cats(thread_id)
+        if active_cats:
+            if delivery_mode == "force":
+                # User explicitly chose force-send: cancel current and execute
+                tracker.cancel_all(thread_id)
+            else:
+                # Queue mode (auto or explicit)
+                should_enqueue = True
 
     # Persist user message (with attachments if any)
     attachments = data.get("attachments", []) or []
@@ -145,6 +194,37 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
         }
     )
 
+    # --- Enqueue path ---
+    if should_enqueue:
+        target_cat_ids = [a["breed_id"] for a in agents]
+        user_id = data.get("userId", "default")
+        result = invocation_queue.enqueue(
+            thread_id=thread_id,
+            user_id=user_id,
+            content=intent.clean_message,
+            target_cats=target_cat_ids,
+            source="user",
+            intent=intent.intent,
+        )
+        # Broadcast queue_updated to frontend
+        await manager.broadcast(thread_id, {
+            "type": "queue_updated",
+            "thread_id": thread_id,
+            "entries": _serialize_queue_entries(invocation_queue.list_entries(thread_id=thread_id)),
+            "outcome": result.outcome,
+            "queue_position": result.queue_position,
+        })
+        # Send intent_mode so UI knows which cats are targeted
+        await websocket.send_json(
+            {
+                "type": "intent_mode",
+                "mode": intent.workflow or intent.intent,
+                "cats": target_cat_ids,
+            }
+        )
+        return  # Message is queued; execution deferred
+
+    # --- Execute path ---
     await websocket.send_json(
         {
             "type": "intent_mode",
@@ -152,6 +232,26 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
             "cats": [a["breed_id"] for a in agents],
         }
     )
+
+    await _execute_agents(
+        websocket, thread_id, thread, agents, intent, tm, agent_router, app
+    )
+
+
+async def _execute_agents(
+    websocket, thread_id, thread, agents, intent, tm, agent_router, app,
+    queue_entry_id=None,
+):
+    """Execute agents and handle completion with auto-dequeue."""
+    tracker = getattr(app.state, "invocation_tracker", None)
+    invocation_queue = getattr(app.state, "invocation_queue", None)
+
+    # Track invocation start for each agent
+    tracked_invocations = {}
+    if tracker:
+        for agent in agents:
+            inv = tracker.start(thread_id, agent["breed_id"])
+            tracked_invocations[agent["breed_id"]] = inv
 
     try:
         session_chain = getattr(app.state, "session_chain", None)
@@ -256,6 +356,10 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
 
             # Only persist final response to database
             if response.is_final:
+                # Mark tracker complete for this cat
+                if tracker and response.cat_id in tracked_invocations:
+                    tracker.complete(thread_id, response.cat_id, tracked_invocations[response.cat_id])
+
                 msg_metadata = {}
                 if response.usage:
                     msg_metadata["usage"] = response.usage
@@ -302,3 +406,37 @@ async def _handle_send_message(websocket, thread_id, data, tm, agent_router, app
     except Exception as e:
         log.exception("Error in agent execution: %s", e)
         await websocket.send_json({"type": "error", "message": str(e)})
+
+    finally:
+        # Mark queue entry complete if this was a queued execution
+        if invocation_queue and queue_entry_id:
+            invocation_queue.complete_entry(queue_entry_id)
+
+        # Auto-dequeue: if queue has pending entries, execute the next one
+        if invocation_queue and tracker:
+            next_entry = invocation_queue.list_entries(
+                thread_id=thread_id, status="queued"
+            )
+            if next_entry:
+                entry = next_entry[0]
+                entry.status = "processing"
+                entry.processing_started_at = time.time()
+                # Reconstruct agents from target_cats
+                next_agents = []
+                for cat_id in entry.target_cats:
+                    routed = agent_router.route_message(f"@{cat_id}")
+                    next_agents.extend(routed)
+                if next_agents:
+                    next_intent = parse_intent(entry.content, len(next_agents))
+                    # Broadcast queue_updated (processing)
+                    await manager.broadcast(thread_id, {
+                        "type": "queue_updated",
+                        "thread_id": thread_id,
+                        "entries": _serialize_queue_entries(invocation_queue.list_entries(thread_id=thread_id)),
+                        "action": "processing",
+                    })
+                    # Fire-and-forget execution of next entry
+                    asyncio.create_task(_execute_agents(
+                        websocket, thread_id, thread, next_agents, next_intent,
+                        tm, agent_router, app, queue_entry_id=entry.id,
+                    ))

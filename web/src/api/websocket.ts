@@ -90,6 +90,24 @@ export class WSManager {
     }
   }
 
+  sendWithDeliveryMode(
+    content: string,
+    deliveryMode: "queue" | "force",
+    attachments?: Attachment[]
+  ) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({ type: "send_message", content, attachments, deliveryMode })
+      );
+    }
+  }
+
+  cancelQueueEntry(entryId: string) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "cancel_queue_entry", entry_id: entryId }));
+    }
+  }
+
   sendInteractiveAction(blockId: string, values: string[]) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "interactive_action", block_id: blockId, values }));

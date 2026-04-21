@@ -68,6 +68,7 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
   const mentionMenuRef = useRef<HTMLDivElement>(null);
   const mentionListRef = useRef<HTMLDivElement>(null);
   const startStreaming = useChatStore((s) => s.startStreaming);
+  const isStreaming = useChatStore((s) => s.isStreaming);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const cats = useCatStore((s) => s.cats);
   const fetchCats = useCatStore((s) => s.fetchCats);
@@ -148,7 +149,7 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
     .map((option, index) => ({ option, index }))
     .filter(({ index }) => index !== activeMentionIndex);
 
-  const handleSend = async () => {
+  const handleSend = async (deliveryMode?: "queue" | "force") => {
     if ((!text.trim() && attachments.length === 0) || disabled) return;
     const trimmed = text.trim();
 
@@ -163,6 +164,7 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
             content: result.forward.content,
             attachments,
             forceIntent: result.forward.forceIntent,
+            deliveryMode,
           },
         });
         window.dispatchEvent(event);
@@ -176,9 +178,13 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
       return;
     }
 
-    startStreaming();
+    // For queue mode, do NOT call startStreaming() — message goes to queue
+    if (deliveryMode !== "queue") {
+      startStreaming();
+    }
+
     const event = new CustomEvent("meowai:send", {
-      detail: { content: trimmed, attachments },
+      detail: { content: trimmed, attachments, deliveryMode },
     });
     window.dispatchEvent(event);
     setText("");
@@ -583,13 +589,36 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
               className="nest-field nest-r-lg w-full resize-none px-4 py-3 text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
-          <button
-            onClick={handleSend}
-            disabled={disabled || (!text.trim() && attachments.length === 0)}
-            className="nest-button-primary nest-r-md h-12 w-12 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Send size={18} />
-          </button>
+          {isStreaming ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleSend("queue")}
+                disabled={disabled || (!text.trim() && attachments.length === 0)}
+                className="h-12 w-12 rounded-xl bg-violet-500 text-white shadow-sm hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-40"
+                title="排队发送"
+              >
+                <svg className="mx-auto h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h18M3 18h18" />
+                </svg>
+              </button>
+              <button
+                onClick={() => handleSend("force")}
+                disabled={disabled || (!text.trim() && attachments.length === 0)}
+                className="h-12 w-12 rounded-xl bg-red-500 text-white shadow-sm hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                title="强制发送（取消当前）"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleSend()}
+              disabled={disabled || (!text.trim() && attachments.length === 0)}
+              className="nest-button-primary nest-r-md h-12 w-12 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Send size={18} />
+            </button>
+          )}
         </div>
       </div>
     </div>

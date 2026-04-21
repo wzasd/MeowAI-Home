@@ -48,3 +48,11 @@ class InvocationTracker:
 
     def is_active(self, thread_id: str, cat_id: str) -> bool:
         return (thread_id, cat_id) in self._slots
+
+    def is_any_active(self, thread_id: str) -> bool:
+        """Check if any cat is currently invoking for this thread."""
+        return any(k[0] == thread_id for k in self._slots)
+
+    def get_active_cats(self, thread_id: str) -> list:
+        """Get list of cat_ids currently invoking for this thread."""
+        return [k[1] for k in self._slots if k[0] == thread_id]

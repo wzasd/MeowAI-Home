@@ -14,6 +14,8 @@ from src.models.cat_registry import CatRegistry
 from src.models.agent_registry import AgentRegistry
 from src.session.chain import SessionChain
 from src.invocation.tracker import InvocationTracker
+from src.invocation.queue import InvocationQueue
+from src.invocation.processor import QueueProcessor
 from src.memory import MemoryService
 from src.auth.store import AuthStore
 from src.auth.middleware import AuthMiddleware
@@ -60,6 +62,8 @@ async def lifespan(app: FastAPI):
     app.state.agent_router = AgentRouterV2(cat_reg, agent_reg)
     app.state.session_chain = SessionChain()
     app.state.invocation_tracker = InvocationTracker()
+    app.state.invocation_queue = InvocationQueue(max_depth=5)
+    app.state.queue_processor = QueueProcessor(queue=app.state.invocation_queue)
     app.state.memory_service = MemoryService()
 
     auth_store = AuthStore()
