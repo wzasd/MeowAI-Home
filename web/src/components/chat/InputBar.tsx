@@ -69,6 +69,7 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
   const mentionListRef = useRef<HTMLDivElement>(null);
   const startStreaming = useChatStore((s) => s.startStreaming);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const queueEntries = useChatStore((s) => s.queueEntries);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const cats = useCatStore((s) => s.cats);
   const fetchCats = useCatStore((s) => s.fetchCats);
@@ -590,24 +591,25 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
             />
           </div>
           {isStreaming ? (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => handleSend("queue")}
                 disabled={disabled || (!text.trim() && attachments.length === 0)}
-                className="h-12 w-12 rounded-xl bg-violet-500 text-white shadow-sm hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-40"
-                title="排队发送"
+                className="flex h-[54px] items-center gap-2.5 rounded-[18px] bg-gradient-to-br from-[#8d7aa6] to-[#6f5f84] px-4 text-sm font-bold text-white shadow-[0_14px_30px_rgba(98,74,121,0.24)] transition-all hover:shadow-[0_16px_34px_rgba(98,74,121,0.30)] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <svg className="mx-auto h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h18M3 18h18" />
-                </svg>
+                放入发件夹
+                {queueEntries.filter((e) => e.status === "queued").length > 0 && (
+                  <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-white/18 px-2 py-0.5 text-xs">
+                    {queueEntries.filter((e) => e.status === "queued").length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => handleSend("force")}
                 disabled={disabled || (!text.trim() && attachments.length === 0)}
-                className="h-12 w-12 rounded-xl bg-red-500 text-white shadow-sm hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
-                title="强制发送（取消当前）"
+                className="h-[54px] rounded-[18px] border border-[#a4462a]/18 bg-[rgba(255,250,246,0.84)] px-4 text-sm font-bold text-[#a4462a] transition-all hover:bg-[#a4462a]/8 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Send size={18} />
+                立刻插队
               </button>
             </div>
           ) : (
