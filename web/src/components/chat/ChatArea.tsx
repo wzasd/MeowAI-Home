@@ -342,7 +342,7 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
       )}
 
       <InputBar
-        disabled={isStreaming}
+        disabled={!currentThread}
         replyTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
       />

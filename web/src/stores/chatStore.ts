@@ -114,12 +114,13 @@ export const useChatStore = create<ChatState>((set) => ({
   setWsConnected: (connected) => set({ wsConnected: connected }),
 
   startStreaming: () =>
-    set({
+    set((state) => ({
       isStreaming: true,
-      streamingResponses: new Map(),
-      streamingThinking: new Map(),
-      streamingStatuses: new Map(),
-    }),
+      // Preserve existing streaming state so concurrent responses aren't wiped
+      streamingResponses: state.streamingResponses,
+      streamingThinking: state.streamingThinking,
+      streamingStatuses: state.streamingStatuses,
+    })),
 
   stopStreaming: () =>
     set({
