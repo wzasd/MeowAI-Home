@@ -60,6 +60,24 @@ const SLASH_COMMANDS: SlashCommand[] = [
   },
 ];
 
+// Queue display helpers
+const CAT_DISPLAY: Record<string, string> = {
+  orange: "阿橘",
+  inky: "墨点",
+  patch: "花花",
+};
+
+function catLabel(id: string) {
+  return CAT_DISPLAY[id] ?? id;
+}
+
+function catPillClass(id: string) {
+  if (id === "orange") return "bg-[#bd7332]/11 text-[#8e4d1f]";
+  if (id === "inky") return "bg-[#82738f]/11 text-[#6f5f84]";
+  if (id === "patch") return "bg-[#2f7467]/10 text-[#2f7467]";
+  return "bg-[#82738f]/11 text-[#6f5f84]";
+}
+
 export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -70,9 +88,14 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
   const startStreaming = useChatStore((s) => s.startStreaming);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const queueEntries = useChatStore((s) => s.queueEntries);
+  const addQueueEntry = useChatStore((s) => s.addQueueEntry);
   const currentThreadId = useThreadStore((s) => s.currentThreadId);
   const cats = useCatStore((s) => s.cats);
   const fetchCats = useCatStore((s) => s.fetchCats);
+
+  const queued = queueEntries.filter((e) => e.status === "queued" || e.status === "processing");
+  const hero = queued[0];
+  const rest = queued.slice(1);
 
   const { processCommand } = useChatCommands();
 
@@ -159,7 +182,25 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
     if (result.consumed) {
       if (result.forward) {
         // Forward with forced intent (e.g. /ideate content)
-        startStreaming();
+        if (deliveryMode !== "queue") {
+          startStreaming();
+        }
+        // Optimistic UI for queue mode
+        if (deliveryMode === "queue") {
+          const thread = useThreadStore.getState().currentThread;
+          const targetCat = thread?.current_cat_id ?? "";
+          addQueueEntry({
+            id: `local-${Date.now()}`,
+            thread_id: currentThreadId ?? "",
+            user_id: "default",
+            content: result.forward.content,
+            target_cats: targetCat ? [targetCat] : [],
+            status: "queued",
+            created_at: Date.now() / 1000,
+            source: "user",
+            intent: result.forward.forceIntent,
+          });
+        }
         const event = new CustomEvent("meowai:send", {
           detail: {
             content: result.forward.content,
@@ -182,6 +223,30 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
     // For queue mode, do NOT call startStreaming() — message goes to queue
     if (deliveryMode !== "queue") {
       startStreaming();
+    }
+
+    // Optimistic UI: immediately show Send Dock for queue mode
+    if (deliveryMode === "queue") {
+      const thread = useThreadStore.getState().currentThread;
+      const targetCat = thread?.current_cat_id ?? "";
+      // Extract @mentions from text as target cats
+      const mentionMatches = trimmed.match(/@(\w+)/g);
+      const targetCats = mentionMatches
+        ? mentionMatches.map((m) => m.slice(1))
+        : targetCat
+          ? [targetCat]
+          : [];
+      addQueueEntry({
+        id: `local-${Date.now()}`,
+        thread_id: currentThreadId ?? "",
+        user_id: "default",
+        content: trimmed,
+        target_cats: targetCats,
+        status: "queued",
+        created_at: Date.now() / 1000,
+        source: "user",
+        intent: "execute",
+      });
     }
 
     const event = new CustomEvent("meowai:send", {
@@ -407,11 +472,125 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
         </div>
       )}
       <div className="nest-panel nest-r-2xl overflow-visible mx-auto max-w-4xl px-3 py-3">
+        {/* Send Dock — queue status bar + hero card + slip edges */}
+        {queued.length > 0 && (
+          <div className="mb-3">
+            {/* Status bar */}
+            <div className="flex items-center justify-between rounded-t-[20px] border border-b-0 border-[#8d7aa6]/20 bg-[#8d7aa6]/[0.06] px-3.5 py-2.5 dark:border-[#8d7aa6]/16 dark:bg-[#8d7aa6]/[0.10]">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#8d7aa6]/18 text-[#8d7aa6] text-xs dark:bg-[#8d7aa6]/24 dark:text-[#b8a5c8]">
+                  ✦
+                </div>
+                <span className="text-sm font-semibold text-[var(--text-strong)]">
+                  待送 {queued.length} 封
+                </span>
+                <span className="text-xs text-[var(--text-faint)]">
+                  下一封发给 @{catLabel(hero?.target_cats[0] ?? "")}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  queued.forEach((e) =>
+                    window.dispatchEvent(
+                      new CustomEvent("meowai:cancel_queue_entry", { detail: { entryId: e.id } })
+                    )
+                  );
+                }}
+                className="text-xs text-[var(--text-faint)] hover:text-[var(--danger)]"
+              >
+                清空
+              </button>
+            </div>
+
+            {/* Hero slip — first entry */}
+            {hero && (
+              <div className="rounded-[18px] border border-[#8d7aa6]/14 bg-gradient-to-br from-[#fffcf9]/90 to-white/50 p-3.5 shadow-[0_8px_20px_rgba(98,74,121,0.06)] dark:from-[rgba(55,40,50,0.92)] dark:to-[rgba(45,32,40,0.88)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#8d7aa6]/12 px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#8d7aa6] dark:bg-[#8d7aa6]/20 dark:text-[#b8a5c8]">
+                        下一封
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {hero.target_cats.map((catId) => (
+                          <span
+                            key={catId}
+                            className={`inline-flex items-center gap-1 rounded-full border border-[#8d7aa6]/14 px-2 py-0.5 text-[10px] ${catPillClass(catId)}`}
+                          >
+                            @{catLabel(catId)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--text-strong)]">
+                      {hero.content}
+                    </p>
+                    <div className="mt-2 text-[11px] text-[var(--text-faint)]">
+                      {hero.status === "processing"
+                        ? "正在送达..."
+                        : `等 ${catLabel(hero.target_cats[0] ?? "")} 回复后自动送达`}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent("meowai:cancel_queue_entry", { detail: { entryId: hero.id } })
+                      )
+                    }
+                    className="shrink-0 rounded-full border border-[#a4462a]/14 bg-white/60 px-2.5 py-1 text-[11px] text-[#a4462a] hover:bg-[#a4462a]/8 dark:bg-white/5"
+                  >
+                    撤回
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Stacked slip edges — subsequent entries */}
+            {rest.length > 0 && (
+              <div className="mt-1.5 flex gap-1.5 px-1">
+                {rest.slice(0, 2).map((entry, idx) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-center gap-2 rounded-[14px] border border-[#8d7aa6]/10 bg-[#fffcf9]/60 px-2.5 py-1.5 dark:border-[#8d7aa6]/12 dark:bg-[rgba(55,40,50,0.6)]"
+                  >
+                    <span className="text-[10px] font-bold text-[#8d7aa6] dark:text-[#b8a5c8]">
+                      {String(idx + 2).padStart(2, "0")}
+                    </span>
+                    <span className="text-[11px] text-[var(--text-soft)]">
+                      @{catLabel(entry.target_cats[0] ?? "")}
+                    </span>
+                    <button
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent("meowai:cancel_queue_entry", { detail: { entryId: entry.id } })
+                        )
+                      }
+                      className="text-xs text-[var(--text-faint)] hover:text-[#a4462a]"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {rest.length > 2 && (
+                  <span className="flex items-center rounded-[14px] border border-[#8d7aa6]/10 bg-[#8d7aa6]/[0.06] px-2.5 py-1.5 text-[10px] text-[#8d7aa6] dark:border-[#8d7aa6]/12 dark:bg-[#8d7aa6]/[0.10] dark:text-[#b8a5c8]">
+                    +{rest.length - 2}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mb-3 flex flex-wrap items-center gap-2 px-1">
           <span className="nest-kicker">输入区</span>
           <span className="nest-chip">Enter 发送</span>
           <span className="nest-chip">@ 提及猫咪</span>
           <span className="nest-chip">/ 指令</span>
+          {queued.length > 0 && (
+            <span className="nest-chip bg-[#8d7aa6]/10 text-[#8d7aa6] dark:bg-[#8d7aa6]/16 dark:text-[#b8a5c8]">
+              待送 {queued.length} 封
+            </span>
+          )}
         </div>
         <div className="flex items-end gap-2">
           <VoiceInput
@@ -598,9 +777,9 @@ export function InputBar({ disabled = false, replyTo, onCancelReply }: InputBarP
                 className="flex h-[54px] items-center gap-2.5 rounded-[18px] bg-gradient-to-br from-[#8d7aa6] to-[#6f5f84] px-4 text-sm font-bold text-white shadow-[0_14px_30px_rgba(98,74,121,0.24)] transition-all hover:shadow-[0_16px_34px_rgba(98,74,121,0.30)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 放入发件夹
-                {queueEntries.filter((e) => e.status === "queued").length > 0 && (
+                {queued.length > 0 && (
                   <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-white/18 px-2 py-0.5 text-xs">
-                    {queueEntries.filter((e) => e.status === "queued").length}
+                    {queued.length}
                   </span>
                 )}
               </button>

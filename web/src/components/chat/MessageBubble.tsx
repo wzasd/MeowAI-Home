@@ -2,6 +2,9 @@ import type { MessageResponse } from "../../types";
 import { AgentBadge } from "./AgentBadge";
 import { ThinkingPanel } from "./ThinkingPanel";
 import { MarkdownContent } from "./MarkdownContent";
+import { CliOutputBlock } from "./CliOutputBlock";
+import { toCliEvents } from "./toCliEvents";
+import type { CliEvent, ToolEvent } from "../../stores/chatStore";
 import { TTSButton } from "./TTSButton";
 import { RichBlocks } from "../rich/RichBlocks";
 import { parseRichBlocks } from "../../types/rich";
@@ -99,6 +102,26 @@ export function MessageBubble({
   const [showActions, setShowActions] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const richBlocks = parseRichBlocks(message.metadata);
+
+  // Convert stored tool_events to CliEvent format (clowder style)
+  const storedToolEvents = message.metadata?.tool_events as Array<{
+    call_id: string;
+    tool_name: string;
+    summary: string;
+    detail?: string;
+    status: string;
+    duration_ms?: number;
+  }> | undefined;
+  const toolEvents: ToolEvent[] = storedToolEvents?.map((te, i) => ({
+    id: te.call_id || `tool-${i}`,
+    type: "tool_use" as const,
+    label: te.tool_name,
+    detail: te.detail,
+    timestamp: Date.now() + i,
+  })) ?? [];
+  const cliEvents: CliEvent[] = toCliEvents(toolEvents, undefined);
+  const hasCliBlock = cliEvents.length > 0;
+
   const catLabel = message.cat_id ? CAT_INFO[message.cat_id]?.name || message.cat_id : "系统";
   const toneClass = message.cat_id ? COLOR_TONES[CAT_INFO[message.cat_id]?.color || ""] || "" : "";
 
@@ -226,6 +249,13 @@ export function MessageBubble({
               <div className="mt-3 border-t border-[var(--line)] pt-3">
                 <RichBlocks blocks={richBlocks} />
               </div>
+            )}
+            {!isUser && hasCliBlock && (
+              <CliOutputBlock
+                events={cliEvents}
+                status="done"
+                breedColor={message.cat_id ? CAT_INFO[message.cat_id]?.hexColor : undefined}
+              />
             )}
           </div>
         )}

@@ -5,10 +5,11 @@ import { useRef, useEffect, useState } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { InputBar } from "./InputBar";
 import { StreamingIndicator } from "./StreamingIndicator";
-import { InlineQueuePanel } from "./InlineQueuePanel";
 import { AgentBadge } from "./AgentBadge";
 import { IntentBadge } from "./IntentBadge";
 import { ThinkingPanel } from "./ThinkingPanel";
+import { CliOutputBlock } from "./CliOutputBlock";
+import { toolCallStateToCliEvents } from "./toCliEvents";
 import { SessionStatus } from "../session/SessionStatus";
 import { ExportButton } from "./ExportButton";
 import { HistorySearchModal } from "./HistorySearchModal";
@@ -29,6 +30,7 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
   const streamingResponses = useChatStore((s) => s.streamingResponses);
   const streamingThinking = useChatStore((s) => s.streamingThinking);
   const streamingStatuses = useChatStore((s) => s.streamingStatuses);
+  const streamingTools = useChatStore((s) => s.streamingTools);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
@@ -273,36 +275,79 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
             );
           })}
 
-          {Array.from(streamingResponses.values()).map((resp) => (
-            <div key={resp.catId} className="mb-5 flex justify-start">
-              <AgentBadge catId={resp.catId} />
-              <div className="max-w-[78%] lg:max-w-[72%]">
-                {streamingStatuses.get(resp.catId) && (
-                  <div className="mb-2 flex items-center gap-1.5 px-1 text-xs text-[var(--text-faint)]">
-                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
-                    <span>{streamingStatuses.get(resp.catId)}</span>
+          {Array.from(streamingResponses.values()).map((resp) => {
+            const tools = streamingTools.get(resp.catId);
+            const cliEvents = tools ? toolCallStateToCliEvents(tools) : [];
+            const hasCliBlock = cliEvents.length > 0;
+            const hasContent = resp.content.trim().length > 0;
+            return (
+              <div key={resp.catId} className="mb-5 flex justify-start">
+                <AgentBadge catId={resp.catId} />
+                <div className="max-w-[78%] lg:max-w-[72%]">
+                  {streamingStatuses.get(resp.catId) && (
+                    <div className="mb-2 flex items-center gap-1.5 px-1 text-xs text-[var(--text-faint)]">
+                      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
+                      <span>{streamingStatuses.get(resp.catId)}</span>
+                    </div>
+                  )}
+                  {streamingThinking.get(resp.catId) && (
+                    <ThinkingPanel
+                      content={streamingThinking.get(resp.catId)!}
+                      catId={resp.catId}
+                      catName={resp.catName}
+                    />
+                  )}
+                  <div className="nest-card nest-r-xl relative px-5 py-4 overflow-hidden">
+                    <div className="msg-ink-line" />
+                    {/* Text content (clowder style: only show if has content) */}
+                    {hasContent && (
+                      <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--text-strong)]">
+                        {resp.content}
+                        <span className="animate-pulse text-[var(--text-faint)]">|</span>
+                      </p>
+                    )}
+                    {/* CliOutputBlock inside the bubble (clowder style) */}
+                    {hasCliBlock && (
+                      <CliOutputBlock
+                        events={cliEvents}
+                        status="streaming"
+                        breedColor="#7C3AED"
+                      />
+                    )}
+                    {/* Placeholder when no content and no tools */}
+                    {!hasContent && !hasCliBlock && (
+                      <span className="text-xs text-[var(--text-soft)]">Thinking...</span>
+                    )}
                   </div>
-                )}
-                {streamingThinking.get(resp.catId) && (
-                  <ThinkingPanel
-                    content={streamingThinking.get(resp.catId)!}
-                    catId={resp.catId}
-                    catName={resp.catName}
-                  />
-                )}
-                <div className="nest-card nest-r-xl relative px-5 py-4 overflow-hidden">
-                  <div className="msg-ink-line" />
-                  <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--text-strong)]">
-                    {resp.content}
-                  </p>
-                  <span className="animate-pulse text-[var(--text-faint)]">|</span>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+
+          {/* Tool events for cats that have tools but no streaming response yet */}
+          {Array.from(streamingTools.entries())
+            .filter(([catId]) => !streamingResponses.has(catId))
+            .filter(([, tools]) => tools.length > 0)
+            .map(([catId, tools]) => {
+              const cliEvents = toolCallStateToCliEvents(tools);
+              return (
+                <div key={`tools-${catId}`} className="mb-5 flex justify-start">
+                  <AgentBadge catId={catId} />
+                  <div className="max-w-[78%] lg:max-w-[72%]">
+                    <div className="nest-card nest-r-xl relative px-5 py-4 overflow-hidden">
+                      <CliOutputBlock
+                        events={cliEvents}
+                        status="streaming"
+                        breedColor="#7C3AED"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
 
           {Array.from(streamingStatuses.entries())
-            .filter(([catId]) => !streamingResponses.has(catId))
+            .filter(([catId]) => !streamingResponses.has(catId) && !streamingTools.has(catId))
             .map(([catId, status]) => (
               <div key={`status-${catId}`} className="mb-5 flex justify-start">
                 <AgentBadge catId={catId} />
@@ -323,7 +368,6 @@ export function ChatArea({ isRightPanelOpen, onToggleRightPanel }: ChatAreaProps
 
       {isStreaming && <StreamingIndicator />}
 
-      <InlineQueuePanel />
 
       {newMessageCount > 0 && !isUserAtBottom && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10">

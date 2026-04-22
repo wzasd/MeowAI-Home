@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { WSManager } from "../api/websocket";
 import { useThreadStore } from "../stores/threadStore";
 import { useChatStore } from "../stores/chatStore";
-import type { QueueEntryResponse } from "../stores/chatStore";
+import type { QueueEntryResponse, ToolCallState } from "../stores/chatStore";
 import type { MessageResponse, Attachment } from "../types";
 
 const STREAM_TIMEOUT_MS = 60_000;
@@ -20,6 +20,7 @@ export function useWebSocket() {
   const addStreamingResponse = useChatStore((s) => s.addStreamingResponse);
   const addStreamingThinking = useChatStore((s) => s.addStreamingThinking);
   const setStreamingStatus = useChatStore((s) => s.setStreamingStatus);
+  const startStreaming = useChatStore((s) => s.startStreaming);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
   const setSkill = useChatStore((s) => s.setSkill);
@@ -27,6 +28,7 @@ export function useWebSocket() {
   const setWsConnected = useChatStore((s) => s.setWsConnected);
   const addSystemError = useChatStore((s) => s.addSystemError);
   const setQueueEntries = useChatStore((s) => s.setQueueEntries);
+  const addToolEvent = useChatStore((s) => s.addToolEvent);
 
   // Track first mount (skip Strict Mode double-fire)
   useEffect(() => {
@@ -80,6 +82,10 @@ export function useWebSocket() {
     ws.on("cat_status", (data) => {
       setStreamingStatus(data.cat_id as string, data.content as string);
     });
+    ws.on("streaming_start", () => {
+      // Queue auto-dequeue: next cat is starting, keep UI in streaming state
+      startStreaming();
+    });
     ws.on("done", () => {
       if (streamTimeoutRef.current) clearTimeout(streamTimeoutRef.current);
       stopStreaming();
@@ -87,6 +93,40 @@ export function useWebSocket() {
     });
     ws.on("queue_updated", (data) => {
       setQueueEntries((data.entries ?? []) as QueueEntryResponse[]);
+    });
+    ws.on("tool_event", (data) => {
+      console.log("[WS] tool_event received:", data);
+      const toText = (value: unknown): string => {
+        if (typeof value === "string") return value;
+        if (value === null || value === undefined) return "";
+        try {
+          return JSON.stringify(value).slice(0, 500);
+        } catch {
+          return String(value).slice(0, 500);
+        }
+      };
+      const rawStatus = toText(data.status);
+      const status: ToolCallState["status"] =
+        rawStatus === "completed" ||
+        rawStatus === "failed" ||
+        rawStatus === "cancelled"
+          ? rawStatus
+          : "running";
+      const tool: ToolCallState = {
+        callId: toText(data.call_id),
+        runId: toText(data.run_id),
+        toolName: toText(data.tool_name) || "tool",
+        summary: toText(data.summary),
+        detail: toText(data.detail),
+        status,
+        startedAt: Date.now(),
+      };
+      if (data.phase === "finish") {
+        tool.finishedAt = Date.now();
+        tool.durationMs = (data.duration_ms as number) || undefined;
+      }
+      console.log("[WS] calling addToolEvent for cat:", data.cat_id, "tool:", tool);
+      addToolEvent(data.cat_id as string, tool);
     });
     ws.on("session_created", () => {
       window.dispatchEvent(new CustomEvent("meowai:session_created"));

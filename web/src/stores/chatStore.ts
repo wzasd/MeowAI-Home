@@ -6,6 +6,40 @@ import type { MessageResponse, StreamingCatResponse } from "../types";
 
 export type DeliveryMode = "queue" | "force" | undefined;
 
+/** F097: CLI Output unified event stream (clowder-compatible) */
+export type CliEventKind = "tool_use" | "tool_result" | "text" | "error";
+export type CliStatus = "streaming" | "done" | "failed" | "interrupted";
+
+export interface CliEvent {
+  id: string;
+  kind: CliEventKind;
+  timestamp: number;
+  label?: string;
+  detail?: string;
+  content?: string;
+}
+
+/** ToolEvent for toCliEvents conversion */
+export interface ToolEvent {
+  id: string;
+  type: "tool_use" | "tool_result";
+  label: string;
+  detail?: string;
+  timestamp: number;
+}
+
+export interface ToolCallState {
+  callId: string;
+  runId: string;
+  toolName: string;
+  summary: string;
+  detail: string;
+  status: "running" | "completed" | "failed" | "cancelled";
+  startedAt: number;
+  finishedAt?: number;
+  durationMs?: number;
+}
+
 export interface QueueEntryResponse {
   id: string;
   thread_id: string;
@@ -31,6 +65,7 @@ interface ChatState {
   wsConnected: boolean;
   queueEntries: QueueEntryResponse[];
   deliveryMode: DeliveryMode;
+  streamingTools: Map<string, ToolCallState[]>; // catId -> tools
 
   fetchMessages: (threadId: string) => Promise<void>;
   addLocalMessage: (msg: MessageResponse) => void;
@@ -48,8 +83,11 @@ interface ChatState {
   addSystemError: (content: string) => void;
   addSystemMessage: (content: string) => void;
   setQueueEntries: (entries: QueueEntryResponse[]) => void;
+  addQueueEntry: (entry: QueueEntryResponse) => void;
   setDeliveryMode: (mode: DeliveryMode) => void;
   clearQueue: () => void;
+  addToolEvent: (catId: string, tool: ToolCallState) => void;
+  clearToolsForCat: (catId: string) => void;
   clearAll: () => void;
 }
 
@@ -66,6 +104,7 @@ export const useChatStore = create<ChatState>((set) => ({
   wsConnected: false,
   queueEntries: [],
   deliveryMode: undefined,
+  streamingTools: new Map(),
 
   fetchMessages: async (threadId: string) => {
     const data = await api.messages.list(threadId);
@@ -141,6 +180,8 @@ export const useChatStore = create<ChatState>((set) => ({
       streamingResponses: state.streamingResponses,
       streamingThinking: state.streamingThinking,
       streamingStatuses: state.streamingStatuses,
+      // Clear tools from previous session so new session starts fresh
+      streamingTools: new Map(),
     })),
 
   stopStreaming: () =>
@@ -186,8 +227,49 @@ export const useChatStore = create<ChatState>((set) => ({
   },
 
   setQueueEntries: (entries) => set({ queueEntries: entries }),
+  addQueueEntry: (entry) => set((s) => ({ queueEntries: [...s.queueEntries, entry] })),
   setDeliveryMode: (mode) => set({ deliveryMode: mode }),
   clearQueue: () => set({ queueEntries: [], deliveryMode: undefined }),
+
+  addToolEvent: (catId, tool) =>
+    set((state) => {
+      console.log("[Store] addToolEvent called:", { catId, tool });
+      const next = new Map(state.streamingTools);
+      const existing = next.get(catId) ?? [];
+      // If runId changed, clear old tools for this cat
+      const first = existing[0];
+      if (first && first.runId !== tool.runId) {
+        console.log("[Store] runId changed, clearing old tools");
+        next.set(catId, [tool]);
+      } else {
+        const idx = existing.findIndex((t) => t.callId === tool.callId);
+        if (idx >= 0) {
+          // Update existing
+          console.log("[Store] updating existing tool at index", idx);
+          const existingTool = existing[idx];
+          const updated = [...existing];
+          updated[idx] = {
+            ...tool,
+            startedAt: existingTool?.startedAt ?? tool.startedAt,
+            finishedAt: tool.finishedAt ?? existingTool?.finishedAt,
+            durationMs: tool.durationMs ?? existingTool?.durationMs,
+          };
+          next.set(catId, updated);
+        } else {
+          console.log("[Store] appending new tool, total:", existing.length + 1);
+          next.set(catId, [...existing, tool]);
+        }
+      }
+      console.log("[Store] streamingTools now has", next.size, "cats");
+      return { streamingTools: next };
+    }),
+
+  clearToolsForCat: (catId) =>
+    set((state) => {
+      const next = new Map(state.streamingTools);
+      next.delete(catId);
+      return { streamingTools: next };
+    }),
 
   clearAll: () =>
     set({
@@ -202,5 +284,6 @@ export const useChatStore = create<ChatState>((set) => ({
       wsConnected: false,
       queueEntries: [],
       deliveryMode: undefined,
+      streamingTools: new Map(),
     }),
 }));

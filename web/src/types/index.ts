@@ -87,10 +87,10 @@ export interface CatDetailResponse extends CatResponse {
   cliArgs?: string[];
 }
 
-export const CAT_INFO: Record<string, { name: string; emoji: string; color: string }> = {
-  orange: { name: "阿橘", emoji: "🐱", color: "orange" },
-  inky: { name: "墨点", emoji: "🐾", color: "purple" },
-  patch: { name: "花花", emoji: "🌸", color: "pink" },
+export const CAT_INFO: Record<string, { name: string; emoji: string; color: string; hexColor: string }> = {
+  orange: { name: "阿橘", emoji: "🐱", color: "orange", hexColor: "#C67835" },
+  inky: { name: "墨点", emoji: "🐾", color: "purple", hexColor: "#9B7BD6" },
+  patch: { name: "花花", emoji: "🌸", color: "pink", hexColor: "#D4769F" },
 };
 
 export interface ConnectorResponse {

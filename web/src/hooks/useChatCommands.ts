@@ -126,9 +126,9 @@ function parseSlashCommand(input: string): { name: string; args: string } | null
   // Match /name[space]args or /name exactly
   const match = trimmed.match(/^\/([a-zA-Z0-9_-]+)(?:\s+(.*))?$/s);
   if (!match) return null;
-  const name = match[1].toLowerCase();
+  const name = match[1]?.toLowerCase();
   const args = match[2] ?? "";
-  if (name in COMMANDS) {
+  if (name && name in COMMANDS) {
     return { name, args };
   }
   return null;
@@ -161,7 +161,7 @@ export function useChatCommands() {
       };
 
       const def = COMMANDS[parsed.name];
-      return def.handler(parsed.args, ctx);
+      return def?.handler(parsed.args, ctx) ?? { consumed: false };
     },
     [addSystemMessage, clearMessages, cats]
   );
